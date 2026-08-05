@@ -1,0 +1,491 @@
+{% comment %}
+  ============================================================================
+  GIFT REVIEW (M7 / Build Guide Page 6)
+  ============================================================================
+  The gifter's last stop before Shopify checkout. Reached from Gift Checkout
+  (M6) submit, which persists form state to sessionStorage (key nb_gift_state)
+  and mirrors it as URL params on the redirect here — see
+  docs/decisions/gift-checkout-state-and-timezone.md for the locked state
+  contract this page reads.
+
+  Liquid cannot read sessionStorage or the incoming URL params directly, so —
+  same pattern as gift-checkout.liquid — this section server-renders ONE
+  hidden JSON blob per bundle (name, price, image, availability, and the
+  bundle's own variant) by iterating the gifts-and-bundles collection.
+  gift-review.js reads state, resolves the matching bundle, and renders
+  every row.
+
+  Send the gift adds the bundle's own variant to cart directly (recipient +
+  gifter details as line item properties — a customer-visible `Gift: "Yes"`
+  plus underscore-prefixed automation properties, matching the existing
+  bundle line-item property convention) and redirects to /checkout. See
+  docs/decisions/gift-review-checkout-mechanism.md for the full mechanism,
+  what still needs setting up in Shopify Admin, and the Klaviyo Gift
+  Purchased firing point.
+
+  Data in:  sessionStorage / URL state from Gift Checkout.
+  Data out: Shopify cart (bundle line item) -> Shopify checkout.
+  ============================================================================
+{% endcomment %}
+{% liquid
+  assign bundle_collection = collections['gifts-bundles']
+  if bundle_collection.products.size == 0
+    assign bundle_collection = collections['gifts-and-bundles']
+  endif
+  assign gift_js_url = 'gift-review.js' | asset_url
+  assign checkout_url = '/pages/gift-checkout'
+%}
+
+<gift-review
+  class="gift-review"
+  data-gift-src="{{ gift_js_url }}"
+  data-checkout-url="{{ checkout_url }}"
+  data-collection-url="{{ bundle_collection.url | default: '/collections/gifts-and-bundles' }}"
+  data-sending-label="{{ 'gift_review.sending' | t | escape }}"
+  data-sending-now-label="{{ 'gift_review.sending_now' | t | escape }}"
+  data-send-helper="{{ 'gift_review.send_helper' | t | escape }}"
+  data-error-unavailable="{{ 'gift_review.error_unavailable' | t | escape }}"
+  data-submit-label="{{ 'gift_review.submit' | t | escape }}"
+  data-submit-loading-label="{{ 'gift_review.submit_loading' | t | escape }}"
+  {{ section.shopify_attributes }}
+>
+  <h1 class="gift-review__heading">{{ 'gift_review.heading' | t }}</h1>
+
+  <div class="gift-review__inner">
+    {% comment %}
+      ----------------------------------------------------------------------
+      Per-bundle data — same source/shape as gift-checkout.liquid's blob,
+      plus variantId (the bundle's own single variant). Send the gift adds
+      that variant to cart directly — see
+      docs/decisions/gift-review-checkout-mechanism.md for the mechanism.
+      ----------------------------------------------------------------------
+    {% endcomment %}
+    <script type="application/json" data-bundles>
+      [
+        {% for bundle in bundle_collection.products %}
+          {
+            "id": {{ bundle.id | json }},
+            "slug": {{ bundle.handle | json }},
+            "name": {{ bundle.title | json }},
+            "price": {{ bundle.price | money | json }},
+            "image": {{ bundle.featured_image | image_url: width: 240 | json }},
+            "imageAlt": {{ bundle.title | json }},
+            "available": {% capture _bundle_state %}{% render 'bundle-availability', product: bundle %}{% endcapture %}{% assign _bundle_state = _bundle_state | strip %}{% if _bundle_state == 'available' %}true{% else %}false{% endif %},
+            "url": {{ bundle.url | json }},
+            "variantId": {{ bundle.selected_or_first_available_variant.id | json }}
+          }{% unless forloop.last %},{% endunless %}
+        {% endfor %}
+      ]
+    </script>
+
+    <div class="gift-review__summary" data-summary></div>
+    <hr class="gift-review__divider">
+
+    <div class="gift-review__rows" data-rows>
+      {% # TO — recipient email %}
+      <div class="gift-review__row" data-row="to">
+        <div class="gift-review__row-main">
+          <p class="gift-review__label">{{ 'gift_review.section_to' | t }}</p>
+          <p class="gift-review__value-name" data-value="recipient_name"></p>
+          <p class="gift-review__value" data-value="recipient_email"></p>
+        </div>
+        <a class="gift-review__edit" data-edit-link href="{{ checkout_url }}">{{ 'gift_review.edit' | t }}</a>
+      </div>
+
+      {% # FROM — gifter email %}
+      <div class="gift-review__row" data-row="from">
+        <div class="gift-review__row-main">
+          <p class="gift-review__label">{{ 'gift_review.section_from' | t }}</p>
+          <p class="gift-review__value-name" data-value="gifter_name"></p>
+          <p class="gift-review__value" data-value="gifter_email"></p>
+        </div>
+        <a class="gift-review__edit" data-edit-link href="{{ checkout_url }}">{{ 'gift_review.edit' | t }}</a>
+      </div>
+
+      {% # NOTE — verbatim italic note %}
+      <div class="gift-review__row" data-row="note" hidden>
+        <div class="gift-review__row-main">
+          <p class="gift-review__label">{{ 'gift_review.section_note' | t }}</p>
+          <p class="gift-review__note" data-value="buyer_note"></p>
+        </div>
+        <a class="gift-review__edit gift-review__edit--top" data-edit-link href="{{ checkout_url }}">{{ 'gift_review.edit' | t }}</a>
+      </div>
+
+      {% # SENDING — date + 9 AM helper %}
+      <div class="gift-review__row" data-row="sending">
+        <div class="gift-review__row-main">
+          <p class="gift-review__label">{{ 'gift_review.section_sending' | t }}</p>
+          <p class="gift-review__value" data-value="send_date_display"></p>
+          <p class="gift-review__helper" data-value="send_helper"></p>
+        </div>
+        <a class="gift-review__edit" data-edit-link href="{{ checkout_url }}">{{ 'gift_review.edit' | t }}</a>
+      </div>
+    </div>
+
+    <hr class="gift-review__divider">
+
+    <div class="gift-review__total-row">
+      <span class="gift-review__total-label">{{ 'gift_review.total_label' | t }}</span>
+      <span class="gift-review__total-value" data-value="total"></span>
+    </div>
+
+    <p class="gift-review__shipping-note">{{ 'gift_review.shipping_note' | t }}</p>
+
+    <p class="gift-review__error" data-submit-error hidden></p>
+
+    <button type="button" class="gift-review__submit" data-submit>
+      {{ 'gift_review.submit' | t }}
+    </button>
+
+    <a class="gift-review__cancel" data-cancel href="{{ bundle_collection.url | default: '/collections/gifts-and-bundles' }}">
+      {{ 'gift_review.cancel' | t }}
+    </a>
+  </div>
+</gift-review>
+
+{% stylesheet %}
+  /* ---- Design tokens (Build Guide 4.6, shared with gift-checkout) ---- */
+  .gift-review {
+    --gift-bg: #ffffff;
+    --gift-text-primary: #1f1f1e;
+    --gift-text-secondary: #6f6e69;
+    --gift-text-tertiary: #9c9b92;
+    --gift-border-divider: rgba(0, 0, 0, 0.25);
+    --gift-required: #b85450;
+    --gift-radius: 8px;
+    --gift-max-width: 660px;
+
+    display: block;
+    background-color: #ffffff;
+    padding-block-start: 140px;
+    padding-block-end: 3rem;
+    padding-inline: 1rem;
+  }
+
+  .gift-review__heading {
+    max-width: var(--gift-max-width);
+    margin-inline: auto;
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--gift-text-primary);
+    margin-bottom: 30px;
+  }
+
+  .gift-review__inner {
+    max-width: var(--gift-max-width);
+    margin-inline: auto;
+    background: var(--gift-bg);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: var(--gift-radius);
+    padding: 32px 36px;
+  }
+
+  /* ---- Bundle summary (mirrors gift-checkout__summary-*) ---- */
+  .gift-review__summary-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .gift-review__summary-thumb {
+    flex: 0 0 88px;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border-radius: var(--gift-radius);
+    overflow: hidden;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+  }
+
+  .gift-review__summary-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 6px;
+  }
+
+  .gift-review__summary-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .gift-review__summary-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--gift-text-tertiary);
+    margin-bottom: 5px;
+  }
+
+  .gift-review__summary-name {
+    font-size: 25px;
+    font-weight: 500;
+    line-height: 1.15;
+    color: var(--gift-text-primary);
+  }
+
+  .gift-review__summary-price {
+    font-size: 17px;
+    color: var(--gift-text-secondary);
+    margin-top: 4px;
+  }
+
+  /* ---- Dividers ---- */
+  .gift-review__divider {
+    border: none;
+    border-top: 1px solid var(--gift-border-divider);
+    margin: 24px 0;
+  }
+
+  /* ---- Rows ---- */
+  .gift-review__rows {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gift-review__row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--gift-border-divider);
+  }
+
+  .gift-review__row:first-child {
+    padding-top: 0;
+  }
+
+  .gift-review__row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .gift-review__row-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .gift-review__label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--gift-text-tertiary);
+    margin: 0 0 6px;
+  }
+
+  .gift-review__value-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--gift-text-primary);
+    margin: 0;
+  }
+
+  .gift-review__value {
+    font-size: 14px;
+    color: var(--gift-text-primary);
+    margin: 0;
+  }
+
+  .gift-review__value-name + .gift-review__value {
+    color: var(--gift-text-secondary);
+    margin-top: 2px;
+  }
+
+  .gift-review__note {
+    font-size: 14px;
+    font-style: italic;
+    line-height: 1.6;
+    color: var(--gift-text-secondary);
+    margin: 0;
+    max-width: 46ch;
+    white-space: pre-wrap;
+  }
+
+  .gift-review__helper {
+    font-size: 12.5px;
+    color: var(--gift-text-tertiary);
+    margin: 4px 0 0;
+  }
+
+  .gift-review__edit {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--gift-text-secondary);
+    text-decoration: underline;
+    white-space: nowrap;
+  }
+
+  .gift-review__edit--top {
+    margin-top: 1px;
+  }
+
+  /* ---- Total ---- */
+  .gift-review__total-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+  }
+
+  .gift-review__total-label {
+    font-size: 16px;
+    color: var(--gift-text-primary);
+  }
+
+  .gift-review__total-value {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--gift-text-primary);
+  }
+
+  .gift-review__shipping-note {
+    font-size: 12.5px;
+    color: var(--gift-text-tertiary);
+    margin: -10px 0 22px;
+  }
+
+  /* ---- Error ---- */
+  .gift-review__error {
+    font-size: 13px;
+    color: var(--gift-required);
+    margin: 0 0 14px;
+    text-align: center;
+  }
+
+  /* ---- Submit / Cancel ---- */
+  .gift-review__submit {
+    width: 100%;
+    font: inherit;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: var(--gift-bg);
+    background: var(--gift-text-primary);
+    border: none;
+    border-radius: 11px;
+    height: 66px;
+    cursor: pointer;
+    transition: opacity 140ms ease;
+  }
+
+  .gift-review__submit:hover {
+    opacity: 0.88;
+  }
+
+  .gift-review__submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .gift-review__cancel {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--gift-text-tertiary);
+    text-decoration: underline;
+  }
+
+  /* ---- Mobile ---- */
+  @media screen and (max-width: 680px) {
+    .gift-review__inner {
+      padding: 21px 18px;
+    }
+
+    .gift-review__summary-card {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .gift-review__summary-thumb {
+      width: 72px;
+      height: 72px;
+      flex: 0 0 72px;
+      margin-bottom: 14px;
+    }
+
+    .gift-review__summary-name {
+      font-size: 21px;
+    }
+
+    .gift-review__summary-price {
+      font-size: 16px;
+    }
+
+    .gift-review__row {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .gift-review__edit {
+      align-self: flex-start;
+    }
+
+    .gift-review__heading {
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+
+    .gift-review__submit {
+      height: 64px;
+    }
+  }
+{% endstylesheet %}
+
+{% comment %}
+  ============================================================================
+  WEB COMPONENT REGISTRATION — mirrors <gift-checkout>.
+  ============================================================================
+{% endcomment %}
+{% javascript %}
+  class GiftReview extends HTMLElement {
+    connectedCallback() {
+      if (this.controller) return;
+      import(this.dataset.giftSrc)
+        .then((module) => {
+          this.controller = new module.GiftReviewController(this);
+        })
+        .catch((err) => {
+          console.error('Failed to load gift review controller:', err);
+        });
+    }
+  }
+
+  if (!customElements.get('gift-review')) {
+    customElements.define('gift-review', GiftReview);
+  }
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Gift review",
+  "tag": "section",
+  "class": "gift-review-section",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "The gift review page. Reads gift state from sessionStorage/URL params left by Gift Checkout, resolves the matching bundle from the gifts-and-bundles collection, and adds that bundle's own variant to cart on Send the gift. See docs/decisions/gift-review-checkout-mechanism.md."
+    }
+  ],
+  "presets": [
+    {
+      "name": "Gift review"
+    }
+  ]
+}
+{% endschema %}

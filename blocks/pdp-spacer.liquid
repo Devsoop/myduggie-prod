@@ -1,0 +1,55 @@
+{% doc %}
+  Renders the spacer between the PDP hero and product content.
+{% enddoc %}
+
+{% assign spacer_height = block.settings.desktop_height %}
+{% assign spacer_height_mobile = block.settings.mobile_height %}
+
+{% style %}
+  .pdp-spacer-{{ block.id }} {
+    display: block;
+    width: 100%;
+    height: {{ spacer_height }}px;
+  }
+
+  @media screen and (max-width: 749px) {
+    .pdp-spacer-{{ block.id }} {
+      height: {{ spacer_height_mobile }}px;
+    }
+  }
+{% endstyle %}
+
+<div class="pdp-spacer-{{ block.id }}" {{ block.shopify_attributes }}></div>
+
+{% schema %}
+{
+  "name": "PDP spacer",
+  "settings": [
+    {
+      "type": "range",
+      "id": "desktop_height",
+      "label": "Desktop height",
+      "min": 0,
+      "max": 200,
+      "step": 10,
+      "unit": "px",
+      "default": 60
+    },
+    {
+      "type": "range",
+      "id": "mobile_height",
+      "label": "Mobile height",
+      "min": 0,
+      "max": 200,
+      "step": 10,
+      "unit": "px",
+      "default": 40
+    }
+  ],
+  "presets": [
+    {
+      "name": "PDP spacer"
+    }
+  ]
+}
+{% endschema %}

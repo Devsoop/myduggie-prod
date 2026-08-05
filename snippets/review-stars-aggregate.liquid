@@ -1,0 +1,52 @@
+{%- doc -%}
+  §5.9 Aggregate rating stars — fractional fill via SVG linearGradient.
+  @param {number} average - e.g. 4.3 → 4 full stars + 5th filled to 30%
+  @param {string} [unique_id] - Unique id for SVG gradient defs
+{%- enddoc -%}
+
+{%- liquid
+  assign unique_id = unique_id | default: 'agg-default'
+  assign average = average | default: 0 | times: 1.0
+  assign full_stars = average | floor
+  assign decimal_part = average | minus: full_stars
+  assign partial_pct = decimal_part | times: 100 | round
+  assign has_partial = false
+  if partial_pct > 0 and full_stars < 5
+    assign has_partial = true
+  endif
+  assign empty_start = full_stars | plus: 1
+  if has_partial
+    assign empty_start = full_stars | plus: 2
+  endif
+-%}
+
+<span class="reviews-stars reviews-stars--aggregate" aria-label="{{ average }} out of 5 stars">
+  {%- for i in (1..full_stars) -%}
+    <svg class="reviews-stars__icon" width="18" height="18" viewBox="0 0 24 24" fill="#1F1F1E" aria-hidden="true">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  {%- endfor -%}
+
+  {%- if has_partial -%}
+    <svg class="reviews-stars__icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <linearGradient id="reviews-partial-star-{{ unique_id }}">
+          <stop offset="{{ partial_pct }}%" stop-color="#1F1F1E"/>
+          <stop offset="{{ partial_pct }}%" stop-color="#1F1F1E" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+        fill="url(#reviews-partial-star-{{ unique_id }})"
+        stroke="#1F1F1E"
+        stroke-width="1.5"
+      />
+    </svg>
+  {%- endif -%}
+
+  {%- for i in (empty_start..5) -%}
+    <svg class="reviews-stars__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F1F1E" stroke-width="1.5" aria-hidden="true">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  {%- endfor -%}
+</span>

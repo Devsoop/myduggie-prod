@@ -1,0 +1,796 @@
+{% comment %}
+  ============================================================================
+  GIFT CHECKOUT (M6 / Build Guide Page 5)
+  ============================================================================
+  The gifter's entry point into the gift flow. Reached from the "Give as a
+  gift" CTA on a bundle product page at /pages/gift-checkout?bundle={slug}
+  where {slug} is a bundle product handle (the-pair, the-complete-carry,
+  the-home-kit).
+
+  Liquid cannot read the ?bundle= query param, so this section server-renders
+  ONE hidden summary block per bundle by iterating the gifts-and-bundles
+  collection (same data source / featured_image as the M5 collection cards —
+  fully admin-driven, auto-supports new bundles). gift-checkout.js reads the
+  URL slug, reveals the matching [data-bundle-slug] block, and writes the slug
+  into a hidden field.
+
+  Submitting validates client-side, persists form state to sessionStorage
+  (with a URL-param fallback per Build Guide 4.4) and routes to the Review
+  page (M7). It does NOT touch Shopify checkout and does NOT fire the Gift
+  Purchased event — the gift is not purchased until "Send the gift" on M7.
+
+  Data in:  bundle slug (URL), logged-in customer profile (pre-fill).
+  Data out: form state -> sessionStorage / URL -> Review page.
+  ============================================================================
+{% endcomment %}
+{% liquid
+  assign bundle_collection = collections['gifts-bundles']
+  if bundle_collection.products.size == 0
+    assign bundle_collection = collections['gifts-and-bundles']
+  endif
+  assign gift_js_url = 'gift-checkout.js' | asset_url
+  assign review_url = '/pages/gift-review'
+
+  # Counter copy with a placeholder JS swaps live as the user types.
+  assign counter_template = 'gift_checkout.note_counter' | t: count: '__COUNT__'
+%}
+
+{{ 'flatpickr.min.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'flatpickr.min.js' | asset_url }}" defer></script>
+
+<gift-checkout
+  class="gift-checkout"
+  data-gift-src="{{ gift_js_url }}"
+  data-review-url="{{ review_url }}"
+  data-bundle-collection-url="{{ bundle_collection.url }}"
+  data-note-max="750"
+  data-sending-label="{{ 'gift_checkout.sending' | t | escape }}"
+  data-prefill-name="{{ customer.first_name | escape }}"
+  data-prefill-email="{{ customer.email | escape }}"
+  data-unavailable-label="{{ 'gift_checkout.unavailable_label' | t | escape }}"
+  data-unavailable-notify="{{ 'gift_checkout.unavailable_notify' | t | escape }}"
+  data-unavailable-choose-another="{{ 'gift_checkout.unavailable_choose_another' | t | escape }}"
+  {{ section.shopify_attributes }}
+>
+  <h1 class="gift-checkout__heading">{{ 'gift_checkout.heading' | t }}</h1>
+
+  <div class="gift-checkout__inner">
+    {% comment %}
+      ----------------------------------------------------------------------
+      BUNDLE SUMMARY — one hidden block per bundle product.
+      JS reveals the block whose data-bundle-slug matches the ?bundle= param.
+      120x120 featured image (object-fit: contain), SENDING label, name, price.
+      ----------------------------------------------------------------------
+    {% endcomment %}
+    <script type="application/json" data-bundles>
+      [
+        {% for bundle in bundle_collection.products %}
+          {
+            "id": {{ bundle.id | json }},
+            "slug": {{ bundle.handle | json }},
+            "name": {{ bundle.title | json }},
+            "price": {{ bundle.price | money | json }},
+            "image": {{ bundle.featured_image | image_url: width: 240 | json }},
+            "imageAlt": {{ bundle.title | json }},
+            "available": {% capture _bundle_state %}{% render 'bundle-availability', product: bundle %}{% endcapture %}{% assign _bundle_state = _bundle_state | strip %}{% if _bundle_state == 'available' %}true{% else %}false{% endif %},
+            "url": {{ bundle.url | json }}
+          }{% unless forloop.last %},{% endunless %}
+        {% endfor %}
+      ]
+    </script>
+
+    <div class="gift-checkout__summary" data-summary></div>
+    <hr class="gift-checkout__divider gift-checkout__divider--summary">
+
+    {% comment %}
+      ----------------------------------------------------------------------
+      FORM — recipient info, gifter info, note, send timing, opt-in.
+      novalidate: validation is handled in JS so we control the messaging.
+      ----------------------------------------------------------------------
+    {% endcomment %}
+    <form class="gift-checkout__form" data-form novalidate>
+      <input type="hidden" name="bundle_slug" data-field-bundle value="">
+      <input type="hidden" name="bundle_product_id" data-field-bundle-product-id value="">
+
+      {% # TO — recipient name + email %}
+      <p class="gift-checkout__section-label" id="GiftToLabel">{{ 'gift_checkout.section_to' | t: default: 'To' }}</p>
+      <div class="gift-checkout__grid">
+        <div class="gift-checkout__field" data-field="recipient_name">
+          <label class="gift-checkout__label--sr-only" for="GiftRecipientName">{{ 'gift_checkout.recipient_name_label' | t }}</label>
+          <input
+            type="text"
+            id="GiftRecipientName"
+            name="recipient_name"
+            class="gift-checkout__input"
+            data-input
+            required
+            autocomplete="off"
+            placeholder="{{ 'gift_checkout.recipient_name_placeholder' | t }}"
+            aria-describedby="GiftRecipientName-helper"
+            data-error-required="{{ 'gift_checkout.error_recipient_name' | t | escape }}"
+          >
+          <span class="gift-checkout__helper" id="GiftRecipientName-helper">{{ 'gift_checkout.recipient_name_helper' | t }}</span>
+          <span class="gift-checkout__error" data-error hidden></span>
+        </div>
+        <div class="gift-checkout__field" data-field="recipient_email">
+          <label class="gift-checkout__label--sr-only" for="GiftRecipientEmail">{{ 'gift_checkout.recipient_email_label' | t }}</label>
+          <input
+            type="email"
+            id="GiftRecipientEmail"
+            name="recipient_email"
+            class="gift-checkout__input"
+            data-input
+            required
+            autocomplete="off"
+            placeholder="{{ 'gift_checkout.email_placeholder' | t }}"
+            aria-describedby="GiftRecipientEmail-helper"
+            data-error-required="{{ 'gift_checkout.error_recipient_email' | t | escape }}"
+            data-error-format="{{ 'gift_checkout.error_email_format' | t | escape }}"
+          >
+          <span class="gift-checkout__helper" id="GiftRecipientEmail-helper">{{ 'gift_checkout.recipient_email_helper' | t }}</span>
+          <span class="gift-checkout__error" data-error hidden></span>
+        </div>
+      </div>
+
+      {% # FROM — gifter name + email %}
+      <p class="gift-checkout__section-label gift-checkout__section-label--spaced" id="GiftFromLabel">{{ 'gift_checkout.section_from' | t: default: 'From' }}</p>
+      <div class="gift-checkout__grid">
+        <div class="gift-checkout__field" data-field="gifter_name">
+          <label class="gift-checkout__label--sr-only" for="GiftGifterName">{{ 'gift_checkout.gifter_name_label' | t }}</label>
+          <input
+            type="text"
+            id="GiftGifterName"
+            name="gifter_name"
+            class="gift-checkout__input"
+            data-input
+            required
+            autocomplete="given-name"
+            placeholder="{{ 'gift_checkout.gifter_name_placeholder' | t }}"
+            aria-describedby="GiftGifterName-helper"
+            data-error-required="{{ 'gift_checkout.error_gifter_name' | t | escape }}"
+          >
+          <span class="gift-checkout__helper" id="GiftGifterName-helper">{{ 'gift_checkout.gifter_name_helper' | t }}</span>
+          <span class="gift-checkout__error" data-error hidden></span>
+        </div>
+        <div class="gift-checkout__field" data-field="gifter_email">
+          <label class="gift-checkout__label--sr-only" for="GiftGifterEmail">{{ 'gift_checkout.gifter_email_label' | t }}</label>
+          <input
+            type="email"
+            id="GiftGifterEmail"
+            name="gifter_email"
+            class="gift-checkout__input"
+            data-input
+            required
+            autocomplete="email"
+            placeholder="{{ 'gift_checkout.email_placeholder' | t }}"
+            aria-describedby="GiftGifterEmail-helper"
+            data-error-required="{{ 'gift_checkout.error_gifter_email' | t | escape }}"
+            data-error-format="{{ 'gift_checkout.error_email_format' | t | escape }}"
+          >
+          <span class="gift-checkout__helper" id="GiftGifterEmail-helper">{{ 'gift_checkout.gifter_email_helper' | t }}</span>
+          <span class="gift-checkout__error" data-error hidden></span>
+        </div>
+      </div>
+
+      <hr class="gift-checkout__divider">
+
+      {% # YOUR NOTE %}
+      <p class="gift-checkout__section-label" id="GiftNoteLabel">{{ 'gift_checkout.section_note' | t: default: 'Your note' }}</p>
+      <div class="gift-checkout__field">
+        <label class="gift-checkout__label--sr-only" for="GiftNote">{{ 'gift_checkout.note_label' | t }}</label>
+        <textarea
+          id="GiftNote"
+          name="buyer_note"
+          class="gift-checkout__textarea"
+          data-note
+          rows="3"
+          placeholder="{{ 'gift_checkout.note_placeholder' | t }}"
+          aria-describedby="GiftNote-counter"
+        ></textarea>
+        <span
+          class="gift-checkout__counter"
+          id="GiftNote-counter"
+          data-counter
+          data-counter-template="{{ counter_template | escape }}"
+          aria-live="polite"
+        >{{ 'gift_checkout.note_counter' | t: count: 0 }}</span>
+      </div>
+
+      {% # WHEN TO SEND %}
+      <p class="gift-checkout__section-label gift-checkout__section-label--spaced" id="GiftSendLabel">{{ 'gift_checkout.when_to_send' | t }}</p>
+      <div class="gift-checkout__send">
+        <div class="gift-checkout__toggle" role="group" aria-label="{{ 'gift_checkout.when_to_send' | t | escape }}">
+          <button
+            type="button"
+            id="GiftSendNow"
+            class="gift-checkout__toggle-btn is-active"
+            data-send-type="immediate"
+            aria-pressed="true"
+          >
+            {{ 'gift_checkout.send_now' | t }}
+          </button>
+          <button
+            type="button"
+            class="gift-checkout__toggle-btn"
+            data-send-type="scheduled"
+            aria-pressed="false"
+          >
+            {{ 'gift_checkout.schedule_later' | t }}
+          </button>
+        </div>
+        <input type="hidden" name="send_type" data-field-send-type value="immediate">
+
+        <div class="gift-checkout__calendar" data-calendar hidden>
+          <input
+            type="text"
+            class="gift-checkout__calendar-input"
+            data-calendar-input
+            placeholder="{{ 'gift_checkout.calendar_placeholder' | t }}"
+            readonly
+            aria-label="{{ 'gift_checkout.calendar_placeholder' | t | escape }}"
+          >
+          <input type="hidden" name="send_date" data-field-send-date value="">
+          <input type="hidden" name="send_timezone" data-field-send-timezone value="">
+          <p class="gift-checkout__helper gift-checkout__helper--send">
+            {{ 'gift_checkout.send_helper' | t }}
+          </p>
+          <span
+            class="gift-checkout__error"
+            data-calendar-error
+            data-message="{{ 'gift_checkout.error_send_date' | t | escape }}"
+            hidden
+          ></span>
+        </div>
+      </div>
+
+      <hr class="gift-checkout__divider">
+
+      {% # Newsletter opt-in %}
+      {% assign newsletter_label = 'gift_checkout.newsletter_label' | t %}
+      <div class="gift-checkout__optin">
+        {% render 'checkbox',
+          id: 'GiftNewsletter',
+          name: 'newsletter_opt_in',
+          value: 'true',
+          checked: true,
+          label: newsletter_label
+        %}
+        <p class="gift-checkout__optin-subtext">{{ 'gift_checkout.newsletter_subtext' | t }}</p>
+      </div>
+
+      <button type="submit" class="gift-checkout__submit" data-submit>
+        {{ 'gift_checkout.submit' | t }}
+      </button>
+    </form>
+
+  </div>
+</gift-checkout>
+
+{% stylesheet %}
+  /* ---- Design tokens ---- */
+  .gift-checkout {
+    --gift-bg: #ffffff;
+    --gift-bg-accent: #f5f2ed;
+    --gift-text-primary: #1f1f1e;
+    --gift-text-secondary: #6f6e69;
+    --gift-text-tertiary: #9c9b92;
+    --gift-text-placeholder: #a8a79e;
+    --gift-border-field: rgba(0, 0, 0, 0.32);
+    --gift-border-divider: rgba(0, 0, 0, 0.25);
+    --gift-required: #b85450;
+    --gift-radius: 8px;
+    --gift-max-width: 660px;
+
+    display: block;
+    background-color: #ffffff;
+    padding-block-start: 140px;
+    padding-block-end: 3rem;
+    padding-inline: 1rem;
+  }
+
+  /* ---- Wrapper + card ---- */
+  .gift-checkout__heading {
+    max-width: var(--gift-max-width);
+    margin-inline: auto;
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--gift-text-primary);
+    margin-bottom: 30px;
+  }
+
+  .gift-checkout__inner {
+    max-width: var(--gift-max-width);
+    margin-inline: auto;
+    background: var(--gift-bg);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: var(--gift-radius);
+    padding: 32px 36px;
+  }
+
+  /* ---- Bundle summary ---- */
+  .gift-checkout__summary {
+    margin-bottom: 0;
+  }
+
+  .gift-checkout__summary-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .gift-checkout__summary-thumb {
+    flex: 0 0 88px;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    border-radius: var(--gift-radius);
+    overflow: hidden;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+  }
+
+  .gift-checkout__summary-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 6px;
+  }
+
+  .gift-checkout__summary-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+  }
+
+  .gift-checkout__summary-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--gift-text-tertiary);
+    margin-bottom: 5px;
+  }
+
+  .gift-checkout__summary-name {
+    font-size: 25px;
+    font-weight: 500;
+    line-height: 1.15;
+    color: var(--gift-text-primary);
+  }
+
+  .gift-checkout__summary-price {
+    font-size: 17px;
+    color: var(--gift-text-secondary);
+    margin-top: 4px;
+  }
+
+  /* ---- Dividers ---- */
+  .gift-checkout__divider {
+    border: none;
+    border-top: 1px solid var(--gift-border-divider);
+    margin: 32px 0;
+  }
+
+  /* ---- Section labels ---- */
+  .gift-checkout__section-label {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--gift-text-primary);
+    margin: 0 0 16px;
+    /* Edit-link scroll targets (#scrollToEditTarget in gift-checkout.js) land
+       150px below the viewport top instead of flush against it. */
+    scroll-margin-top: 150px;
+  }
+
+  .gift-checkout__section-label--spaced {
+    margin-top: 32px;
+  }
+
+  /* ---- Form layout ---- */
+  .gift-checkout__form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .gift-checkout__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
+
+  .gift-checkout__field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* ---- Visually hidden labels (a11y) ---- */
+  .gift-checkout__label--sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* ---- Inputs ---- */
+  .gift-checkout__input,
+  .gift-checkout__textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    color: var(--gift-text-primary);
+    background: var(--gift-bg);
+    border: 1px solid var(--gift-border-field);
+    border-radius: var(--gift-radius);
+    padding: 0 14px;
+    height: 46px;
+    transition: border-color 140ms ease;
+  }
+
+  .gift-checkout__input:focus,
+  .gift-checkout__textarea:focus {
+    outline: none;
+    border-color: var(--gift-text-primary);
+  }
+
+  .gift-checkout__input::placeholder,
+  .gift-checkout__textarea::placeholder {
+    color: var(--gift-text-placeholder);
+  }
+
+  .gift-checkout__textarea {
+    height: auto;
+    min-height: 84px;
+    padding: 12px 14px;
+    resize: none;
+    overflow-y: hidden;
+    line-height: 1.5;
+  }
+
+  /* Invalid state */
+  .gift-checkout__field--invalid .gift-checkout__input,
+  .gift-checkout__field--invalid .gift-checkout__textarea {
+    border-color: var(--gift-required);
+  }
+
+  /* ---- Helper / counter / error ---- */
+  .gift-checkout__helper {
+    font-size: 12.5px;
+    color: var(--gift-text-tertiary);
+    margin: 7px 0 0;
+  }
+
+  .gift-checkout__counter {
+    font-size: 12.5px;
+    color: var(--gift-text-tertiary);
+    text-align: right;
+    margin-top: 7px;
+  }
+
+  .gift-checkout__counter--over {
+    color: var(--gift-required);
+  }
+
+  .gift-checkout__error {
+    font-size: 12px;
+    color: var(--gift-required);
+    margin-top: 5px;
+  }
+
+  /* ---- When to send ---- */
+  .gift-checkout__send {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gift-checkout__toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .gift-checkout__toggle-btn {
+    font: inherit;
+    font-size: 18px;
+    color: var(--gift-text-secondary);
+    background: var(--gift-bg);
+    border: 1px solid var(--gift-border-field);
+    border-radius: 11px;
+    height: 58px;
+    cursor: pointer;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+  }
+
+  .gift-checkout__toggle-btn.is-active {
+    background: var(--gift-text-primary);
+    border-color: var(--gift-text-primary);
+    color: var(--gift-bg);
+    font-weight: 500;
+  }
+
+  .gift-checkout__calendar {
+    margin-top: 0.85rem;
+  }
+
+  .gift-checkout__calendar-input {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    color: var(--gift-text-primary);
+    background: var(--gift-bg);
+    border: 1px solid var(--gift-border-field);
+    border-radius: var(--gift-radius);
+    padding: 0 14px;
+    height: 46px;
+    cursor: pointer;
+    transition: border-color 140ms ease;
+  }
+
+  .gift-checkout__calendar-input:focus {
+    outline: none;
+    border-color: var(--gift-text-primary);
+  }
+
+  /* Beat base.css's `input:not([type=checkbox],[type=radio])` (0,1,1) reset */
+  .gift-checkout__form .gift-checkout__input,
+  .gift-checkout__form .gift-checkout__calendar-input {
+    border-color: var(--gift-border-field);
+  }
+
+  .gift-checkout__helper--send {
+    margin-top: 0.5rem;
+  }
+
+  /* ---- Opt-in ---- */
+  .gift-checkout__optin {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 22px;
+  }
+
+  .gift-checkout__optin .checkbox__label {
+    font-size: 15px;
+    color: var(--gift-text-primary);
+  }
+
+  .gift-checkout__optin-subtext {
+    font-size: 12.5px;
+    color: var(--gift-text-tertiary);
+    margin: 0 0 0 1.9rem;
+    line-height: 1.5;
+  }
+
+  /* ---- Submit ---- */
+  .gift-checkout__submit {
+    width: 100%;
+    font: inherit;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: var(--gift-bg);
+    background: var(--gift-text-primary);
+    border: none;
+    border-radius: 11px;
+    height: 66px;
+    cursor: pointer;
+    transition: opacity 140ms ease;
+  }
+
+  .gift-checkout__submit:hover {
+    opacity: 0.88;
+  }
+
+  .gift-checkout__submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ---- Unavailable state ---- */
+  .gift-checkout__unavailable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .gift-checkout__unavailable-label {
+    font-size: 14px;
+    color: var(--gift-text-secondary);
+    margin: 0;
+  }
+
+  .gift-checkout__unavailable-notify {
+    width: 100%;
+  }
+
+  .gift-checkout__unavailable-link {
+    font-size: 14px;
+    color: var(--gift-text-primary);
+    text-decoration: underline;
+  }
+
+  /* ---- flatpickr skin ---- */
+  .gift-checkout .flatpickr-calendar {
+    box-shadow: none;
+    border: 1px solid var(--gift-border-divider);
+    border-radius: var(--gift-radius);
+    font-family: inherit;
+    margin-top: 0.5rem;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .gift-checkout .flatpickr-calendar.static {
+    position: relative;
+    top: 0;
+  }
+
+  .gift-checkout .flatpickr-months .flatpickr-month,
+  .gift-checkout .flatpickr-current-month,
+  .gift-checkout .flatpickr-weekday {
+    color: var(--gift-text-primary);
+    fill: var(--gift-text-primary);
+  }
+
+  .gift-checkout .flatpickr-day {
+    color: var(--gift-text-primary);
+    border-radius: var(--gift-radius);
+  }
+
+  .gift-checkout .flatpickr-day.today {
+    border-color: var(--gift-border-field);
+  }
+
+  .gift-checkout .flatpickr-day.selected,
+  .gift-checkout .flatpickr-day.selected:hover {
+    background: var(--gift-text-primary);
+    border-color: var(--gift-text-primary);
+    color: var(--gift-bg);
+  }
+
+  .gift-checkout .flatpickr-day:hover {
+    background: #f5f2ed;
+  }
+
+  .gift-checkout .flatpickr-day.flatpickr-disabled,
+  .gift-checkout .flatpickr-day.prevMonthDay,
+  .gift-checkout .flatpickr-day.nextMonthDay {
+    color: var(--gift-text-tertiary);
+  }
+
+  /* ---- Mobile ---- */
+  @media screen and (max-width: 680px) {
+    .gift-checkout {
+      padding-inline: 1rem;
+    }
+
+    .gift-checkout__inner {
+      padding: 21px 18px;
+    }
+
+    /* Summary: centered stack */
+    .gift-checkout__summary-card {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .gift-checkout__summary-thumb {
+      width: 72px;
+      height: 72px;
+      flex: 0 0 72px;
+      margin-bottom: 14px;
+    }
+
+    .gift-checkout__summary-label {
+      font-size: 11.5px;
+    }
+
+    .gift-checkout__summary-name {
+      font-size: 21px;
+    }
+
+    .gift-checkout__summary-price {
+      font-size: 16px;
+    }
+
+    .gift-checkout__divider {
+      margin: 22px 0;
+    }
+
+    .gift-checkout__section-label {
+      font-size: 13px;
+      margin-bottom: 13px;
+    }
+
+    .gift-checkout__section-label--spaced {
+      margin-top: 34px;
+    }
+
+    /* Fields: single column */
+    .gift-checkout__grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .gift-checkout__toggle {
+      gap: 11px;
+    }
+
+    .gift-checkout__toggle-btn {
+      font-size: 17px;
+    }
+
+    .gift-checkout__submit {
+      height: 64px;
+    }
+
+    .gift-checkout__heading {
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+  }
+{% endstylesheet %}
+
+{% comment %}
+  ============================================================================
+  WEB COMPONENT REGISTRATION
+  Mirrors the <bundle-page> pattern: on connect, dynamic-import the JS module
+  and hand it the element. All behavior lives in gift-checkout.js.
+  ============================================================================
+{% endcomment %}
+{% javascript %}
+  class GiftCheckout extends HTMLElement {
+    connectedCallback() {
+      if (this.controller) return;
+      import(this.dataset.giftSrc)
+        .then((module) => {
+          this.controller = new module.GiftCheckoutController(this);
+        })
+        .catch((err) => {
+          console.error('Failed to load gift checkout controller:', err);
+        });
+    }
+  }
+
+  if (!customElements.get('gift-checkout')) {
+    customElements.define('gift-checkout', GiftCheckout);
+  }
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Gift checkout",
+  "tag": "section",
+  "class": "gift-checkout-section",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "The gift checkout form. Reads the bundle from the ?bundle= URL param and routes to the Review page on submit. The bundle summary is populated from the gifts-and-bundles collection."
+    }
+  ],
+  "presets": [
+    {
+      "name": "Gift checkout"
+    }
+  ]
+}
+{% endschema %}

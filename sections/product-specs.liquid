@@ -1,0 +1,192 @@
+{% liquid
+  assign specs = product.metafields.custom.product_specs.value
+  assign sorted_specs = specs | sort: 'sort_order'
+  assign visible_specs_count = 0
+  assign show_specs = section.settings.show_when_metafield_blank
+  if product.metafields.custom.show_specs != blank
+    assign show_specs = product.metafields.custom.show_specs.value
+  endif
+
+  for spec in sorted_specs
+    assign label = spec.label.value | default: spec.label
+    assign value = spec.value.value | default: spec.value
+    if label != blank or value != blank
+      assign visible_specs_count = visible_specs_count | plus: 1
+    endif
+  endfor
+
+  assign specs_remainder = visible_specs_count | modulo: 3
+  assign placeholder_count = 0
+  if specs_remainder > 0
+    assign placeholder_count = 3 | minus: specs_remainder
+  endif
+%}
+
+{% if show_specs and specs != blank %}
+  <section
+    class="product-specs spacing-style color-{{ section.settings.color_scheme }}"
+    style="--pdp-specs-cap: min(1280px, calc(100vw - (2 * var(--page-margin, 24px)))); {% render 'spacing-style', settings: section.settings %}"
+  >
+    <div class="product-specs__inner">
+      {% if section.settings.heading != blank %}
+        <h2 class="product-specs__heading">{{ section.settings.heading | escape }}</h2>
+      {% endif %}
+
+      <div class="product-specs__grid">
+        {% for spec in sorted_specs %}
+          {% liquid
+            assign label = spec.label.value | default: spec.label
+            assign value = spec.value.value | default: spec.value
+          %}
+
+          {% if label != blank or value != blank %}
+            <article class="product-specs__card">
+              {% if label != blank %}
+                <p class="product-specs__label">{{ label | escape }}</p>
+              {% endif %}
+              {% if value != blank %}
+                <div class="product-specs__value">{{ value }}</div>
+              {% endif %}
+            </article>
+          {% endif %}
+        {% endfor %}
+
+        {% for index in (1..placeholder_count) %}
+          <article class="product-specs__card product-specs__card--placeholder" aria-hidden="true"></article>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+{% endif %}
+
+{% stylesheet %}
+  .product-specs {
+    background: var(--color-background);
+    padding-block: calc(var(--padding-block-start) + var(--section-top-offset, 0px)) var(--padding-block-end);
+    padding-inline: var(--padding-inline-start) var(--padding-inline-end);
+  }
+
+  .product-specs__inner {
+    width: var(--pdp-specs-cap);
+    margin-inline: auto;
+  }
+
+  .product-specs__heading {
+    margin: 0 0 14px;
+    font-size: var(--font-h4--size);
+    line-height: var(--font-h4--line-height);
+    letter-spacing: -0.01em;
+  }
+
+  .product-specs__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .product-specs__card {
+    padding: 16px 18px;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+  }
+
+  .product-specs__card--placeholder {
+    visibility: hidden;
+    pointer-events: none;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  .product-specs__label {
+    margin: 0 0 4px;
+    color: rgba(0, 0, 0, 0.52);
+    font-size: 0.7rem;
+    font-weight: var(--font-weight-bold, 700);
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .product-specs__value,
+  .product-specs__value * {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: var(--font-weight-medium, 500);
+    line-height: 1.4;
+    color: var(--color-foreground);
+  }
+
+  @media screen and (max-width: 749px) {
+    .product-specs__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .product-specs__card {
+      padding: 12px 14px;
+    }
+
+    .product-specs__card--placeholder {
+      display: none;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Product specs",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Specifications"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_when_metafield_blank",
+      "label": "Show when visibility metafield is blank",
+      "default": true
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "header",
+      "content": "Padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "Top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "Bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    }
+  ],
+  "presets": [
+    {
+      "name": "Product specs"
+    }
+  ]
+}
+{% endschema %}

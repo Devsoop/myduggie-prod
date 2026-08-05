@@ -1,0 +1,18 @@
+{%- doc -%}
+  Fallback icon_type when product has no custom.outline_image (theme asset SVG key).
+  @param {string} handle - Product handle
+  @returns {string} icon_type via echo
+{%- enddoc -%}
+
+{%- liquid
+  assign icon_type = 'duggie'
+  case handle
+    when 'the-none-better-keychain'
+      assign icon_type = 'keychain'
+    when 'the-none-better-pipe', 'pipe'
+      assign icon_type = 'pipe'
+    when 'the-lil-duggie', 'the-lil-duggie-2'
+      assign icon_type = 'duggie'
+  endcase
+-%}
+{{- icon_type -}}

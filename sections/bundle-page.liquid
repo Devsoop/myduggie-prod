@@ -1,0 +1,1820 @@
+{% comment %}
+  ============================================================================
+  BUNDLE PAGE SECTION — Data Initialization
+  ============================================================================
+  Sets up all variables needed by the template. Reads product metafields for:
+  - constituent_items: list of products that make up this bundle
+  - item_overrides: optional display name/note overrides per constituent
+  - gift_cta_active: boolean flag to show/hide the gift flow CTA
+  - tagline: custom styled description (falls back to product.description)
+  - additional_prose: optional body copy paragraph below the tagline
+  - hero_media: image or video file for the hero slot (falls back to featured_image)
+  - cross_sell_settings: metaobject reference controlling the cross-sell row layout
+
+  Metaobject: "Cross Sell Setting" (type: cross_sell_setting)
+    - grid_template_columns: '1', '2', or '3' — controls CSS grid column count
+    - card_layout: 'vertical' or 'horizontal' — controls card flex direction
+  Product metafield: custom.cross_sell_settings (One metaobject reference)
+  ============================================================================
+{% endcomment %}
+{% liquid
+  assign bundle_product = product
+  assign bundle_price = bundle_product.price | money
+  assign configurator_asset_url = 'bundle-configurator.js' | asset_url
+  # JSON endpoint for Shopify Product Recommendations API (fetched client-side by JS)
+  assign recommendations_url = routes.product_recommendations_url | append: '.json'
+
+  # ---- Read bundle metafields ----
+  # constituent_items: list of product references that make up the bundle (e.g., Pipe + Lighter Case + Stand)
+  assign constituent_items = bundle_product.metafields.custom.constituent_items.value
+  # item_overrides: optional list of display name / note overrides per constituent product
+  assign item_overrides = bundle_product.metafields.custom.constituent_items_overrides.value
+  # gift_cta_active: boolean — when true, shows the "Give as a gift" CTA and divider
+  assign gift_cta_active = bundle_product.metafields.custom.gift_cta_active.value
+  # tagline: custom styled description text (falls back to standard product description)
+  assign bundle_description = bundle_product.metafields.custom.tagline.value | default: bundle_product.description
+  # additional_prose: optional body copy paragraph (rendered above the hero, beside the tagline)
+  assign additional_prose = bundle_product.metafields.custom.additional_prose.value
+
+  # Cross Sell Setting metaobject is no longer used — layout is hardcoded
+  # The metaobject (custom.cross_sell_settings) can be safely deleted from Shopify admin
+
+  # Fallback: try raw metafield if .value returns blank (handles different metafield types)
+  if constituent_items == blank
+    assign constituent_items = bundle_product.metafields.custom.constituent_items
+  endif
+
+  assign item_count = constituent_items.size | default: 0
+  # swatch_style: 'color' (hex blocks) or 'image' (variant product images) — section setting
+  assign swatch_style = section.settings.swatch_style | default: 'color'
+
+  # bundle_available: component-driven buildability — false when any constituent
+  # piece is sold out in every color. Uses the same shared snippet as the bundle
+  # collection card so the two views never disagree.
+  capture bundle_state
+    render 'bundle-availability', product: bundle_product
+  endcapture
+  assign bundle_state = bundle_state | strip
+  assign bundle_available = true
+  if bundle_state == 'unavailable'
+    assign bundle_available = false
+  endif
+
+  assign bundle_hero_display_desktop = 'full_width'
+  assign bundle_hero_display_mobile = 'full_width'
+  if bundle_product.metafields.custom.hero_video_display_mode.value != blank
+    assign bundle_hero_display_desktop = bundle_product.metafields.custom.hero_video_display_mode.value
+  endif
+  if bundle_product.metafields.custom.hero_video_display_mode_mobile.value != blank
+    assign bundle_hero_display_mobile = bundle_product.metafields.custom.hero_video_display_mode_mobile.value
+  endif
+
+  assign bundle_hero_display_desktop = bundle_hero_display_desktop | downcase | strip
+  assign bundle_hero_display_mobile = bundle_hero_display_mobile | downcase | strip
+  if bundle_hero_display_desktop contains 'height' or bundle_hero_display_desktop contains 'hight'
+    assign bundle_hero_display_desktop = 'full_height'
+  elsif bundle_hero_display_desktop contains 'width' or bundle_hero_display_desktop contains 'natural'
+    assign bundle_hero_display_desktop = 'full_width'
+  elsif bundle_hero_display_desktop == 'fill' or bundle_hero_display_desktop contains 'fill'
+    assign bundle_hero_display_desktop = 'full_height'
+  elsif bundle_hero_display_desktop contains 'constrained'
+    assign bundle_hero_display_desktop = 'full_width'
+  else
+    assign bundle_hero_display_desktop = 'full_width'
+  endif
+  if bundle_hero_display_mobile contains 'height' or bundle_hero_display_mobile contains 'hight'
+    assign bundle_hero_display_mobile = 'full_height'
+  elsif bundle_hero_display_mobile contains 'width' or bundle_hero_display_mobile contains 'natural'
+    assign bundle_hero_display_mobile = 'full_width'
+  elsif bundle_hero_display_mobile == 'fill' or bundle_hero_display_mobile contains 'fill'
+    assign bundle_hero_display_mobile = 'full_height'
+  elsif bundle_hero_display_mobile contains 'constrained'
+    assign bundle_hero_display_mobile = 'full_width'
+  else
+    assign bundle_hero_display_mobile = 'full_width'
+  endif
+%}
+
+
+{% comment %}
+  ============================================================================
+  ROOT WEB COMPONENT — <bundle-page>
+  ============================================================================
+  Custom element that wraps the entire bundle page. On mount, it dynamically
+  imports bundle-configurator.js which handles all client-side logic:
+  color selection, add-to-cart, outline composition updates, and cross-sell
+  recommendations.
+
+  Data attributes passed to JS:
+  - data-product-id / handle / title: identifies this bundle product
+  - data-item-count: total number of constituent items to select
+  - data-configurator-src: URL to the JS module (loaded via dynamic import)
+  - data-recommendations-url: Shopify product recommendations API endpoint
+  - data-recommendation-intent: 'related' or 'complementary' (section setting)
+  - data-recommendation-limit: max products to fetch (section setting)
+  - data-currency-code: for price formatting in JS
+  ============================================================================
+{% endcomment %}
+<bundle-page
+  class="bundle-page"
+  data-product-id="{{ bundle_product.id }}"
+  data-product-handle="{{ bundle_product.handle }}"
+  data-product-title="{{ bundle_product.title | escape }}"
+  data-item-count="{{ item_count }}"
+  data-configurator-src="{{ configurator_asset_url }}"
+  data-recommendations-url="{{ recommendations_url }}"
+  data-recommendation-intent="{{ section.settings.recommendation_type }}"
+  data-recommendation-limit="{{ section.settings.max_products }}"
+  data-currency-code="{{ cart.currency.iso_code | default: shop.currency }}"
+  {{ section.shopify_attributes }}
+>
+  <div class="bundle-page__inner page-width">
+    {% comment %}
+      -----------------------------------------------------------------------
+      TITLE BLOCK — Product name + price
+      Centered at top of page. Price formatted via Liquid money filter.
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Title Block %}
+    <div class="bundle-page__title-block">
+      {% unless bundle_available %}
+        <span class="bundle-page__unavailable-eyebrow">
+          {{ 'bundles.currently_unavailable' | t: default: 'Currently unavailable' }}
+        </span>
+      {% endunless %}
+      <h1 class="bundle-page__title">{{ bundle_product.title | escape }}</h1>
+      <p class="bundle-page__price">{{ bundle_price }}</p>
+    </div>
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      TAGLINE
+      Custom styled description from metafield (custom.tagline).
+      Falls back to product.description if metafield is blank.
+      Sits in the header, above the hero. Shown in full (no line clamp).
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Tagline %}
+    {% if bundle_description != blank %}
+      <p class="bundle-page__description">{{ bundle_description }}</p>
+    {% endif %}
+
+    {%- # Prose sits above the hero, beside the tagline -%}
+    {% if additional_prose != blank %}
+      <p class="bundle-page__additional-prose bundle-page__additional-prose--home-kit">{{ additional_prose }}</p>
+    {% endif %}
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      HERO MEDIA — Image or video from custom.hero_media metafield
+      Supports static images (placeholder) and video (CGI render).
+      Falls back to product featured_image if metafield is empty.
+      Videos autoplay muted and loop. Images use object-fit: contain.
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Hero Block — custom.hero_media (image or video) with featured_image fallback %}
+    {% assign hero_media = bundle_product.metafields.custom.hero_media.value %}
+    {% if hero_media %}
+      <div
+        class="bundle-page__hero"
+        {% if hero_media.media_type == 'video' %}
+          data-hero-display-desktop="{{ bundle_hero_display_desktop }}"
+          data-hero-display-mobile="{{ bundle_hero_display_mobile }}"
+          style="
+            {%- if hero_media.preview_image != blank -%}
+              --hero-media-aspect-ratio: {{ hero_media.preview_image.aspect_ratio }};
+              --hero-media-aspect-ratio-mobile: {{ hero_media.preview_image.aspect_ratio }};
+            {%- else -%}
+              --hero-media-aspect-ratio: 1.777;
+              --hero-media-aspect-ratio-mobile: 0.5625;
+            {%- endif -%}
+          "
+        {% endif %}
+      >
+        {% if hero_media.media_type == 'video' %}
+          <video
+            class="bundle-page__hero-video"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+          >
+            {% for source in hero_media.sources %}
+              <source src="{{ source.url }}" type="{{ source.mime_type }}">
+            {% endfor %}
+          </video>
+        {% else %}
+          {{
+            hero_media
+            | image_url: width: 1200
+            | image_tag:
+              loading: 'eager',
+              alt: bundle_product.title,
+              class: 'bundle-page__hero-image'
+          }}
+        {% endif %}
+      </div>
+    {% elsif bundle_product.featured_image %}
+      <div class="bundle-page__hero">
+        {{
+          bundle_product.featured_image
+          | image_url: width: 1200
+          | image_tag:
+            loading: 'eager',
+            alt: bundle_product.title,
+            class: 'bundle-page__hero-image'
+        }}
+      </div>
+    {% endif %}
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      GIFT CTA DIVIDER
+      Conditional block shown when custom.gift_cta_active metafield is true.
+      Displays a prompt ("Don't know what color to get?") with a button
+      linking to the gift checkout flow at /pages/gift-checkout?bundle={handle}.
+      Visually separated by horizontal divider lines above and below.
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Gift CTA Divider — hidden when the bundle can't be built %}
+    {% if gift_cta_active and bundle_available %}
+      <div class="bundle-page__gift-divider">
+        <div class="bundle-page__gift-content">
+          <p class="bundle-page__gift-text">
+            {{ 'bundles.gift_prompt' | t: default: "Don't know what color to get for them? Let them choose." }}
+          </p>
+          <a
+            href="/pages/gift-checkout?bundle={{ bundle_product.handle }}"
+            class="bundle-page__gift-button button button--secondary"
+          >
+            <span class="svg-wrapper bundle-page__gift-icon" aria-hidden="true">
+              {{- 'icon-gift.svg' | inline_asset_content -}}
+            </span>
+            {{ 'bundles.give_as_gift' | t: default: 'Give as a gift' }}
+          </a>
+          <span class="bundle-page__gift-divider-caption">
+            {{ 'bundles.gift_caption_top' | t: default: 'They choose the color. Add a note. Send whenever.' }}
+          </span>
+        </div>
+      </div>
+    {% endif %}
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      BUILD HEADER — "Build your bundle below" + selection counter
+      Shows a label and a live counter ("0 of 4 chosen") updated by JS.
+      The counter uses [data-bundle-counter] and [data-counter-current] for
+      BundleConfigurator to update the count as users pick colors.
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Build Header %}
+    <div class="bundle-page__build-header">
+      <span class="bundle-page__build-label">
+        {{ 'bundles.build_your_bundle' | t: default: 'Build your bundle below' }}
+      </span>
+      <span
+        class="bundle-page__counter"
+        data-bundle-counter
+        data-total="{{ item_count }}"
+      >
+        <span data-counter-current>0</span>
+        {{ 'bundles.of' | t: default: 'of' }}
+        {{ item_count }}
+        {{ 'bundles.chosen' | t: default: 'chosen' }}
+      </span>
+    </div>
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      OUTLINE COMPOSITION — Visual product outline diagram
+      Renders a snippet that shows outline silhouettes of each constituent
+      product. Updates dynamically via JS when colors are selected to show
+      the selected variant's image. Passed constituent_items and item_count.
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Outline Composition %}
+    {% render 'bundle-outline-composition',
+      constituent_items: constituent_items,
+      item_count: item_count
+    %}
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      COLOR PICKERS — One picker per constituent product
+      Loops through constituent_items and renders a color swatch grid for
+      each product. For each constituent:
+      1. Resolves the product (handles both product_reference and direct)
+      2. Reads the "Color" option from product.options_with_values (all variants)
+      3. Checks item_overrides for custom display_title and note
+      4. Looks up Color metaobjects for hex value and special edition badge
+      5. Renders standard swatches first, then a gap spacer, then limited-run
+         swatches — matching the standard-PDP sort order
+      6. Renders swatches as either color blocks or variant images
+         based on section.settings.swatch_style ('color' or 'image')
+      7. Unavailable variants get a disabled state with X overlay
+
+      Data attributes on each swatch button feed into BundleConfigurator JS:
+      - data-swatch: marker for event binding
+      - data-color-name/hex: color identity
+      - data-variant-id: Shopify variant ID for cart operations
+      - data-picker-index: which picker this swatch belongs to
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Color Pickers %}
+    <div class="bundle-page__pickers">
+      {% for item in constituent_items %}
+        {% liquid
+          # Resolve product reference — two possible formats from Shopify metafields:
+          # 1. product_reference type: item.type == 'product_reference', actual product is in item.value
+          # 2. Direct product object: item.id exists, item IS the product
+          assign item_product = item
+          if item.type == 'product_reference'
+            assign item_product = item.value
+          elsif item.id
+            assign item_product = item
+          endif
+
+          # Find the "Color" option from the product's native options_with_values
+          # This replaces the old available_colors metafield — all variants show automatically
+          assign color_option = nil
+          for opt in item_product.options_with_values
+            assign opt_handle = opt.name | handleize
+            if opt_handle == 'color' or opt_handle == 'colour'
+              assign color_option = opt
+              break
+            endif
+          endfor
+
+          # Group-level availability: true when at least one color is in stock.
+          # Reuses the same in-stock rule applied per swatch below so the header
+          # dims exactly when every swatch in the group is dimmed.
+          assign picker_available = false
+          if color_option != blank
+            for ov in color_option.values
+              assign ov_available = ov.available
+              if ov.variant.inventory_management != blank and ov.variant.inventory_quantity <= 0
+                assign ov_available = false
+              endif
+              if ov_available
+                assign picker_available = true
+                break
+              endif
+            endfor
+          endif
+
+          # Default display title is the product's own title
+          assign picker_display_title = item_product.title
+          assign picker_item_note = ''
+
+          # Check if merchant has overridden the display title or added a note for this constituent
+          # Overrides are stored in a separate metafield list, matched by product ID
+          if item_overrides != blank
+            for override in item_overrides
+              assign override_product = override.linked_product.value | default: override.linked_product
+              if override_product.id == item_product.id
+                # Use custom display title if set (e.g., "Your Pipe" instead of "The Duggie Pipe")
+                assign raw_display_title = override.display_title.value | default: override.display_title
+                if raw_display_title != blank
+                  assign picker_display_title = raw_display_title
+                endif
+
+                # Optional note shown below the swatch grid (e.g., "Includes carrying case")
+                assign raw_note = override.note.value | default: override.note
+                if raw_note != blank
+                  assign picker_item_note = raw_note
+                endif
+
+                break
+              endif
+            endfor
+          endif
+        %}
+
+        {% if item_product != blank %}
+          {%- # Each picker card: header + swatch grid + optional note -%}
+          <div
+            class="bundle-page__picker"
+            data-picker-index="{{ forloop.index0 }}"
+            data-product-id="{{ item_product.id }}"
+            data-product-handle="{{ item_product.handle }}"
+          >
+            {%- # Picker header: product name (or override) + "Choose one" helper text -%}
+            <div class="bundle-page__picker-header{% unless picker_available %} bundle-page__picker-header--unavailable{% endunless %}">
+              <h3 class="bundle-page__picker-title">{{ picker_display_title | escape }}</h3>
+              <p class="bundle-page__picker-helper">
+                {{ 'bundles.choose_one' | t: default: 'Choose one' }}
+              </p>
+            </div>
+
+            {% if color_option != blank and color_option.values.size > 0 %}
+              <div class="bundle-page__swatches">
+                {%- comment -%}
+                  Two-pass render: standard colors first, then limited-run with a gap spacer.
+                  This matches the standard-PDP sort order from variant-main-picker.liquid.
+                {%- endcomment -%}
+
+                {%- # Pass 1: Standard (non-special-edition) swatches -%}
+                {% for option_value in color_option.values %}
+                  {% liquid
+                    assign color_name = option_value.name
+                    assign option_value_handle = color_name | handleize
+
+                    # Look up Color metaobject for hex + special edition flag
+                    assign color_hex = ''
+                    assign is_special = false
+                    for color_mo in shop.metaobjects.color.values
+                      assign mo_name = color_mo.name | default: color_mo.fields.name.value | handleize
+                      if mo_name == option_value_handle
+                        assign color_hex = color_mo.hex | default: color_mo.fields.hex.value
+                        if color_mo.is_special_edition == true
+                          assign is_special = true
+                        elsif color_mo.fields.is_special_edition.value == true
+                          assign is_special = true
+                        endif
+                        break
+                      endif
+                    endfor
+                  %}
+
+                  {%- # Skip special edition colors — they render in pass 2 -%}
+                  {% unless is_special %}
+                    {% liquid
+                      # Same in-stock rule as the bundle availability snippet:
+                      # a color is sold out when inventory is tracked and <= 0,
+                      # even if the variant is set to keep selling when out.
+                      assign is_available = option_value.available
+                      if option_value.variant.inventory_management != blank and option_value.variant.inventory_quantity <= 0
+                        assign is_available = false
+                      endif
+                      assign variant_id = option_value.variant.id | default: ''
+                      assign featured_media = option_value.variant.featured_media
+
+                      # Determine swatch display mode: image (variant photo) or color (hex block)
+                      assign show_swatch_image = false
+                      if swatch_style == 'image'
+                        if featured_media
+                          assign show_swatch_image = true
+                        endif
+                      endif
+
+                      # Pre-resolve variant image URL for JS (avoids API fetch on click)
+                      assign variant_image_url = ''
+                      if featured_media
+                        assign variant_image_url = featured_media | image_url: width: 300
+                      endif
+                    %}
+
+                    <button
+                      type="button"
+                      class="bundle-page__swatch{% unless is_available %} bundle-page__swatch--unavailable{% endunless %}"
+                      data-swatch
+                      data-color-name="{{ color_name | escape }}"
+                      data-color-hex="{{ color_hex | escape }}"
+                      data-variant-id="{{ variant_id }}"
+                      data-variant-image="{{ variant_image_url }}"
+                      data-product-id="{{ item_product.id }}"
+                      data-product-handle="{{ item_product.handle }}"
+                      data-picker-index="{{ forloop.parentloop.index0 }}"
+                      data-is-special="false"
+                      {% unless is_available %}disabled{% endunless %}
+                      aria-label="{{ color_name | escape }}"
+                      title="{{ color_name | escape }}"
+                    >
+                      {% if show_swatch_image %}
+                        {{
+                          featured_media
+                          | image_url: width: 96
+                          | image_tag:
+                            loading: 'lazy',
+                            alt: color_name,
+                            class: 'bundle-page__swatch-image'
+                        }}
+                      {% else %}
+                        <span
+                          class="bundle-page__swatch-color"
+                          style="background-color: {{ color_hex | default: '#cccccc' }};"
+                        ></span>
+                      {% endif %}
+
+                      {% unless is_available %}
+                        <span class="bundle-page__swatch-unavailable-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false" role="presentation">
+                            <path d="M25 -1L-1 25" />
+                          </svg>
+                        </span>
+                      {% endunless %}
+                    </button>
+                  {% endunless %}
+                {% endfor %}
+
+                {%- # Pass 2: Limited-run (special edition) swatches with gap spacer -%}
+                {%- assign le_gap_inserted = false -%}
+                {% for option_value in color_option.values %}
+                  {% liquid
+                    assign color_name = option_value.name
+                    assign option_value_handle = color_name | handleize
+
+                    # Look up Color metaobject for hex + special edition flag
+                    assign color_hex = ''
+                    assign is_special = false
+                    for color_mo in shop.metaobjects.color.values
+                      assign mo_name = color_mo.name | default: color_mo.fields.name.value | handleize
+                      if mo_name == option_value_handle
+                        assign color_hex = color_mo.hex | default: color_mo.fields.hex.value
+                        if color_mo.is_special_edition == true
+                          assign is_special = true
+                        elsif color_mo.fields.is_special_edition.value == true
+                          assign is_special = true
+                        endif
+                        break
+                      endif
+                    endfor
+                  %}
+
+                  {%- # Only render special edition colors in this pass -%}
+                  {% if is_special %}
+                    {% liquid
+                      # Same in-stock rule as pass 1 / the availability snippet.
+                      assign is_available = option_value.available
+                      if option_value.variant.inventory_management != blank and option_value.variant.inventory_quantity <= 0
+                        assign is_available = false
+                      endif
+                      assign variant_id = option_value.variant.id | default: ''
+                      assign featured_media = option_value.variant.featured_media
+
+                      assign show_swatch_image = false
+                      if swatch_style == 'image'
+                        if featured_media
+                          assign show_swatch_image = true
+                        endif
+                      endif
+
+                      assign variant_image_url = ''
+                      if featured_media
+                        assign variant_image_url = featured_media | image_url: width: 300
+                      endif
+                    %}
+
+                    {%- # Gap spacer before the first limited-run swatch -%}
+                    {% if le_gap_inserted == false %}
+                      <span class="bundle-page__swatch-le-gap" aria-hidden="true"></span>
+                      {% assign le_gap_inserted = true %}
+                    {% endif %}
+
+                    <button
+                      type="button"
+                      class="bundle-page__swatch{% unless is_available %} bundle-page__swatch--unavailable{% endunless %}"
+                      data-swatch
+                      data-color-name="{{ color_name | escape }}"
+                      data-color-hex="{{ color_hex | escape }}"
+                      data-variant-id="{{ variant_id }}"
+                      data-variant-image="{{ variant_image_url }}"
+                      data-product-id="{{ item_product.id }}"
+                      data-product-handle="{{ item_product.handle }}"
+                      data-picker-index="{{ forloop.parentloop.index0 }}"
+                      data-is-special="true"
+                      {% unless is_available %}disabled{% endunless %}
+                      aria-label="{{ color_name | escape }}"
+                      title="{{ color_name | escape }}"
+                    >
+                      {% if show_swatch_image %}
+                        {{
+                          featured_media
+                          | image_url: width: 96
+                          | image_tag:
+                            loading: 'lazy',
+                            alt: color_name,
+                            class: 'bundle-page__swatch-image'
+                        }}
+                      {% else %}
+                        <span
+                          class="bundle-page__swatch-color"
+                          style="background-color: {{ color_hex | default: '#cccccc' }};"
+                        ></span>
+                      {% endif %}
+
+                      <span class="bundle-page__swatch-badge">
+                        {{ 'bundles.special_edition_badge' | t: default: 'Limited Run' }}
+                      </span>
+
+                      {% unless is_available %}
+                        <span class="bundle-page__swatch-unavailable-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false" role="presentation">
+                            <path d="M25 -1L-1 25" />
+                          </svg>
+                        </span>
+                      {% endunless %}
+                    </button>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% else %}
+              {%- # Empty state when product has no Color option -%}
+              <p class="bundle-page__no-colors">
+                {{ 'bundles.no_colors_available' | t: default: 'No colors available' }}
+              </p>
+            {% endif %}
+
+            {%- # Optional note below swatches (from item_overrides metafield) -%}
+            {% if picker_item_note != blank %}
+              <p class="bundle-page__picker-note">{{ picker_item_note | escape }}</p>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      DUAL CTA — Add to Cart + Gift buttons
+      Two-column grid with:
+      - Left: "Add to cart" button + selection counter caption
+      - Right: "Give as a gift" link (only if gift_cta_active is true)
+
+      When gift CTA is inactive, uses --single modifier for full-width layout.
+      On mobile (<750px), the CTA becomes a fixed bottom bar with the add-to-cart
+      button and counter side-by-side, and gift caption hidden.
+
+      JS interactions via BundleConfigurator:
+      - [data-add-to-cart]: triggers cart submission of all selected variants
+      - [data-counter-current]: updated live as colors are picked
+      - data-success-text / data-error-text: button text states after submission
+      -----------------------------------------------------------------------
+    {% endcomment %}
+  {% # Dual CTA %}
+  {%- # Single column: the gift flow lives in the mid-page divider, so the bottom CTA is Add to cart alone -%}
+    <div class="bundle-page__dual-cta" data-dual-cta>
+      <div class="bundle-page__dual-cta-inner bundle-page__dual-cta-inner--single">
+        {% if bundle_available %}
+          {%- # Left column: Add to Cart button + live counter caption -%}
+          <div class="bundle-page__cta-left">
+            {% comment %}
+              Two-layer markup mirrors the standard PDP: a cart icon + label that slides
+              out, and a checkmark-burst that slides in. The burst animation is driven by
+              global CSS in base.css reacting to data-added="true" (toggled by the configurator
+              JS on a successful add). Error messages swap the label text via JS.
+            {% endcomment %}
+            <button
+              type="button"
+              class="bundle-page__add-to-cart add-to-cart-button button button--primary"
+              data-add-to-cart
+              data-success-text="{{ 'bundles.added_to_cart' | t: default: 'Added to cart' }}"
+              data-error-text="{{ 'bundles.add_to_cart_error' | t: default: 'Unable to add items. Please try again.' }}"
+              disabled
+            >
+              <span class="add-to-cart-text">
+                <span aria-hidden="true" class="svg-wrapper add-to-cart-icon">
+                  {{- 'icon-add-to-cart.svg' | inline_asset_content -}}
+                </span>
+                <span class="add-to-cart-text__content">
+                  <span class="bundle-page__add-to-cart-text">
+                    {{ 'bundles.add_to_cart' | t: default: 'Add to cart' }}
+                  </span>
+                </span>
+              </span>
+              {%- # checkmark burst markup -%}
+              <span class="add-to-cart__added">
+                <span class="svg-wrapper add-to-cart__added-icon">
+                  {{- 'icon-checkmark-burst.svg' | inline_asset_content -}}
+                </span>
+              </span>
+            </button>
+            {%- # Second counter instance (duplicate of build header counter) for CTA area -%}
+            <span class="bundle-page__counter-caption" data-counter-caption>
+              <span data-counter-current>0</span>
+              {{ 'bundles.of' | t: default: 'of' }}
+              {{ item_count }}
+              {{ 'bundles.chosen' | t: default: 'chosen' }}
+            </span>
+          </div>
+        {% else %}
+          {% comment %}
+            Unavailable state — bundle can't be built (a piece is sold out in
+            every color). Replaces Add to cart so an impossible bundle can't be
+            submitted. "Get Notified" is presentational, mirroring the collection card.
+          {% endcomment %}
+          <div class="bundle-page__notify">
+            <span class="bundle-page__notify-label">
+              {{ 'bundles.currently_unavailable' | t: default: 'Currently unavailable' }}
+            </span>
+            <button type="button" class="bundle-page__notify-button button button--primary">
+              {{ 'bundles.get_notified' | t: default: 'Get Notified' }}
+            </button>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% comment %}
+      -----------------------------------------------------------------------
+      CROSS-SELL ROW — "Also made by None Better"
+      Product recommendations fetched client-side via Shopify's Product
+      Recommendations API (/recommendations/products.json).
+
+      Starts hidden with skeleton loading cards. BundleConfigurator.loadRecommendations()
+      fetches data, calls renderRecommendations() which:
+      1. Replaces skeleton HTML with real product cards
+      2. Shows the section (removes .hidden class)
+      3. Binds mobile carousel arrows
+      4. Loads variant swatches per card
+
+      Cards show: product image, name, price, and variant swatches.
+      Desktop uses a CSS grid; mobile uses a horizontal carousel with arrows.
+      Spec: Header 14px/500, Cards 8px radius, 12px padding
+      -----------------------------------------------------------------------
+    {% endcomment %}
+    {% # Cross-sell Row %}
+    {%- # Starts hidden — JS removes .hidden after recommendations load successfully -%}
+    <div class="bundle-page__cross-sell hidden" data-cross-sell>
+      {%- # Header: 14px, font-weight 500 per spec -%}
+      <h3 class="bundle-page__cross-sell-header">
+        {{ 'bundles.also_made_by' | t: default: 'Also made by None Better' }}
+      </h3>
+      {%- # Grid: columns set dynamically via --cross-sell-columns CSS variable (JS reads from data attr) -%}
+      {%- # Skeleton cards show animated gradient placeholder while API loads -%}
+      <div class="bundle-page__cross-sell-carousel">
+        <button
+          class="bundle-page__cross-sell-arrow bundle-page__cross-sell-arrow--prev"
+          data-cross-sell-prev
+          aria-label="{{ 'accessibility.previous' | t: default: 'Previous' }}"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="bundle-page__cross-sell-grid" data-cross-sell-grid>
+          {% for i in (1..section.settings.max_products) %}
+            <div class="bundle-page__cross-sell-card bundle-page__cross-sell-card--skeleton" aria-label="{{ 'accessibility.loading_product_recommendations' | t }}"></div>
+          {% endfor %}
+        </div>
+        <button
+          class="bundle-page__cross-sell-arrow bundle-page__cross-sell-arrow--next"
+          data-cross-sell-next
+          aria-label="{{ 'accessibility.next' | t: default: 'Next' }}"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</bundle-page>
+
+{% comment %}
+  ==============================================================================
+  STYLES
+  ==============================================================================
+  All styles are scoped inside {% stylesheet %} (Shopify auto-scopes to section).
+  Uses CSS custom properties for consistent theming. Color values use oklch()
+  for perceptual uniformity. Spacing scale follows a t-shirt sizing convention
+  (2xs through 2xl). BEM naming: .bundle-page__element--modifier.
+  ==============================================================================
+{% endcomment %}
+{% stylesheet %}
+  /* ---- Design Tokens ----
+     All custom properties are scoped to .bundle-page so they don't leak
+     into global theme styles. The outline composition snippet also
+     references these variables with hardcoded fallbacks for isolation. */
+  .bundle-page {
+    /* Colors — oklch for perceptual uniformity across light/dark contexts */
+    --bundle-bg: rgb(255 255 255 / 1.0);              /* Card background (white) */
+    --bundle-bg-outer: oklch(94.9% 0.009 92);          /* Page background (warm off-white) */
+    --bundle-bg-accent: oklch(96.7% 0.004 94);         /* Subtle accent bg (used in outline placeholder) */
+    --bundle-text-primary: oklch(18.6% 0.006 95);      /* Headings, selected states */
+    --bundle-text-secondary: oklch(41.5% 0.005 95);    /* Body text, labels */
+    --bundle-text-tertiary: oklch(60.1% 0.004 95);     /* Muted text, descriptions */
+    --bundle-border-tertiary: oklch(78% 0.002 95);      /* Card borders, dividers (~25% opacity black) */
+    --bundle-border-secondary: oklch(69% 0.005 95);    /* Hover borders */
+    --bundle-required: oklch(56.5% 0.16 29);           /* Error/validation red */
+
+    /* Radii */
+    --bundle-radius: 0.8rem;     /* Default card/element radius */
+    --bundle-radius-lg: 1rem;    /* Outer container radius */
+
+    /* Layout */
+    --bundle-card-max-width: 62.5rem;                   /* Max width of the white card (1000px) */
+    --bundle-swatch-size: 2.75rem;                      /* Desktop swatch button size (44px) */
+    --bundle-swatch-size-mobile: 2.5rem;                /* Mobile swatch button size (40px) */
+
+    /* Spacing scale — t-shirt sizing (2xs through 2xl) */
+    --bundle-space-2xs: 0.25rem;
+    --bundle-space-xs: 0.5rem;
+    --bundle-space-sm: 0.75rem;
+    --bundle-space-md: 1rem;
+    --bundle-space-lg: 1.5rem;
+    --bundle-space-xl: 1.75rem;
+    --bundle-space-2xl: 2.5rem;
+
+    /* Responsive sizes — clamp(min, preferred, max) */
+    --bundle-panel-padding: clamp(1.125rem, 1.8vw, 1.5rem);
+    --bundle-hero-height: clamp(14rem, 30vw, 18rem);    /* Hero image container height */
+
+    /* Easing curves */
+    --bundle-ease-out: cubic-bezier(0.25, 1, 0.5, 1);         /* Decelerate (for exits) */
+    --bundle-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);     /* Symmetric (for fades) */
+
+    /* Outer page wrapper — warm off-white background */
+    background-color: var(--bundle-bg-outer);
+    --bundle-page-top-gap: clamp(1rem, 2.6vw, 2.25rem);
+    padding-block-start: calc(var(--header-group-height, var(--header-height, 60px)) + var(--bundle-page-top-gap));
+    padding-block-end: var(--bundle-page-top-gap);
+    padding-inline: var(--bundle-space-md);
+  }
+
+  /* ---- Inner card container — white card centered on page ---- */
+  .bundle-page__inner {
+    max-width: var(--bundle-card-max-width);
+    margin-inline: auto;
+    background: var(--bundle-bg);
+    border-radius: var(--bundle-radius-lg);
+    padding: clamp(1rem, 2.2vw, 1.75rem);
+  }
+
+  /* ---- Title Block — centered product name + price ---- */
+  .bundle-page__title-block {
+    text-align: center;
+    padding-top: 60px;
+    margin-bottom: var(--bundle-space-md);
+  }
+
+  /* "Currently unavailable" eyebrow above the title when the bundle can't be built */
+  .bundle-page__unavailable-eyebrow {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--bundle-text-secondary);
+    margin-bottom: 0.4rem;
+  }
+
+  .bundle-page__title {
+    font-size: 1.875rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    color: var(--bundle-text-primary);
+    margin: 0;
+  }
+
+  .bundle-page__price {
+    font-size: 1.6875rem;
+    color: var(--bundle-text-secondary);
+    margin: 0.2rem 0 0;
+  }
+
+  /* ---- Hero Block — featured product image/video in bordered container ---- */
+  /* Hero container is locked to a fixed 16:9 aspect ratio at every width
+     (desktop and mobile). Combined with object-fit: contain, media always
+     displays fully without cropping; non-16:9 media is letterboxed. */
+  .bundle-page__hero {
+    background: var(--bundle-bg);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: var(--bundle-radius);
+    aspect-ratio: 16 / 9;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-top: 55px;
+    margin-bottom: 45px;
+    width: 100%;
+  }
+
+  .bundle-page__hero-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: clamp(0.875rem, 2.4vw, 1.4rem);
+  }
+
+  .bundle-page__hero-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  /* Lock video heroes to 16:9 too, overriding the per-merchant display modes. */
+  .bundle-page__hero:has(video),
+  .bundle-page__hero[data-hero-display-desktop]:has(video),
+  .bundle-page__hero[data-hero-display-mobile]:has(video) {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    width: 100%;
+    max-height: none;
+    margin-inline: auto;
+  }
+
+  /* ---- Description — roman styled text from metafield ---- */
+  .bundle-page__description {
+    text-align: center;
+    font-style: normal;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.0625rem;
+    color: var(--bundle-text-tertiary);
+    margin: 0 auto var(--bundle-space-md);
+    line-height: 1.6;
+    max-width: 30rem;
+    font-weight: 400;
+  }
+
+  /* ---- Additional prose — optional body copy from custom.additional_prose ---- */
+  .bundle-page__additional-prose {
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--bundle-text-secondary);
+    margin: 0 auto var(--bundle-space-lg);
+    line-height: 1.7;
+    max-width: 34rem;
+    font-weight: 400;
+  }
+
+  /* Home Kit — prose moves above the hero and matches the tagline size (17px) */
+  .bundle-page__additional-prose--home-kit {
+    font-size: 1.0625rem; /* 17px — match the tagline */
+    margin-bottom: var(--bundle-space-md);
+  }
+
+  /* ---- Gift Divider — conditional "Give as a gift" prompt between divider lines ---- */
+  .bundle-page__gift-divider {
+    margin-bottom: var(--bundle-space-lg);
+  }
+
+  .bundle-page__gift-content {
+    padding-block: 1.15rem;
+    text-align: center;
+  }
+
+  .bundle-page__gift-text {
+    font-size: 1rem;
+    color: var(--bundle-text-secondary);
+    margin: 0 0 var(--bundle-space-sm);
+  }
+
+  .bundle-page__gift-button {
+    display: inline-block;
+    width: 340px;
+    max-width: 100%;
+  }
+
+  .bundle-page__gift-divider-caption {
+    display: block;
+    font-size: 14px;
+    color: var(--bundle-text-secondary);
+    text-align: center;
+    line-height: 1.45;
+    margin-top: var(--bundle-space-sm);
+  }
+
+  /* ---- Build Header — "Build your bundle below" label + "X of Y chosen" counter ---- */
+  .bundle-page__build-header {
+    display: flex;
+    justify-content: space-between; /* Label left, counter right */
+    align-items: center;
+    margin-bottom: var(--bundle-space-xs);
+  }
+
+  .bundle-page__build-label {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--bundle-text-secondary);
+  }
+
+  /* Counter text — JS updates [data-counter-current] span on each swatch click */
+  .bundle-page__counter {
+    font-size: 0.875rem;
+    color: var(--bundle-text-primary);
+    transition: color 140ms var(--bundle-ease-out);
+  }
+
+  /* Error state — turns counter red when user tries to add-to-cart without all items selected */
+  .bundle-page__counter--error {
+    color: var(--bundle-required);
+  }
+
+  /* ---- Pickers — vertically stacked color picker cards, one per constituent product ---- */
+  .bundle-page__pickers {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    margin-bottom: var(--bundle-space-lg);
+  }
+
+  /* Pickers are separated by spacing rather than divider lines */
+  .bundle-page__picker {
+    padding-top: 0;
+  }
+
+  .bundle-page__picker-header {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Sold-out group: dim the title and "Choose one" to match the dimmed swatches
+     (0.38 mirrors the swatch opacity used for unavailable colors) */
+  .bundle-page__picker-header--unavailable .bundle-page__picker-title,
+  .bundle-page__picker-header--unavailable .bundle-page__picker-helper {
+    opacity: 0.38;
+  }
+
+  /* Product name (or overridden display title) —
+     Bold and larger than the "Choose one" helper so the
+     title reads as the primary label for each picker */
+  .bundle-page__picker-title {
+    font-size: 1.1875rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    font-weight: 700;
+    color: var(--bundle-text-primary);
+    margin: 0;
+  }
+
+  /* "Choose one" helper text below the title —
+     Extra top margin for separation from the title */
+  .bundle-page__picker-helper {
+    font-size: 0.9375rem;
+    color: var(--bundle-text-secondary);
+    margin: 0.3rem 0 0;
+  }
+
+  /* Empty state when no Color metaobjects are linked to the product */
+  .bundle-page__no-colors {
+    font-size: 13px;
+    color: var(--bundle-text-tertiary);
+    font-style: italic;
+  }
+
+  /* Optional note from item_overrides (shown below swatches) */
+  .bundle-page__picker-note {
+    font-style: italic;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.85rem;
+    color: var(--bundle-text-tertiary);
+    margin: 0.35rem 0 0;
+    line-height: 1.4;
+  }
+
+  /* Rubik guard: the bundle page always uses its own native per-constituent
+     swatches (driven by BundleConfigurator). Rubik is a per-product app embed
+     that can't render the constituent pickers, so hide any stray <rubik-swatch>
+     it might inject on the bundle template to avoid a duplicate/conflicting control. */
+  #MainContent[data-template="product.bundle"] rubik-swatch {
+    display: none !important;
+  }
+
+  /* ---- Swatches — horizontal wrap grid of color buttons ---- */
+  .bundle-page__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    /* Reserve room for the "Limited Run" pill that hangs below swatches.
+       Mirrors Rubik's reserved wrapperMargin (~15px) on the standard PDP. */
+    margin-bottom: 1rem;
+  }
+
+  /* Individual swatch button — square with subtle border, lifts on hover */
+  .bundle-page__swatch {
+    width: var(--bundle-swatch-size);
+    height: var(--bundle-swatch-size);
+    border-radius: 0.25rem;
+    /* Subtle border using color-mix: 12% of text color over background */
+    border: 0.5px solid color-mix(in oklab, var(--bundle-text-primary) 12%, var(--bundle-bg) 88%);
+    padding: 2px;
+    background: var(--bundle-bg);
+    cursor: pointer;
+    position: relative; /* For absolute-positioned badge and unavailable overlay */
+    overflow: visible;
+    transition:
+      box-shadow 140ms var(--bundle-ease-out),
+      transform 140ms var(--bundle-ease-out),
+      border-color 140ms var(--bundle-ease-out);
+  }
+
+  /* Hover: darker border + ring shadow + subtle lift */
+  .bundle-page__swatch:hover:not(:disabled) {
+    border-color: var(--bundle-border-secondary);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--bundle-text-primary) 24%, var(--bundle-bg) 76%);
+    transform: translateY(-1px);
+  }
+
+  /* Selected state — solid dark border + ring (set by JS on click) */
+  .bundle-page__swatch--selected {
+    box-shadow: 0 0 0 1px var(--bundle-text-primary);
+    border-color: var(--bundle-text-primary);
+  }
+
+  /* Selected + hover: no additional lift (already visually prominent) */
+  .bundle-page__swatch--selected:hover:not(:disabled) {
+    border-color: var(--bundle-text-primary);
+    box-shadow: 0 0 0 1px var(--bundle-text-primary);
+    transform: none;
+  }
+
+  /* Unavailable (out of stock) — disabled cursor */
+  .bundle-page__swatch--unavailable {
+    cursor: not-allowed;
+  }
+
+  /* Dim the swatch visual (image or color block) when unavailable */
+  .bundle-page__swatch--unavailable .bundle-page__swatch-image,
+  .bundle-page__swatch--unavailable .bundle-page__swatch-color {
+    opacity: 0.38;
+  }
+
+  /* X overlay icon — absolute positioned over the entire swatch */
+  .bundle-page__swatch-unavailable-icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none; /* Click-through to the disabled button below */
+  }
+
+  .bundle-page__swatch-unavailable-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Diagonal strikethrough stroke — matches standard PDP style (dark, not red) */
+  .bundle-page__swatch-unavailable-icon path {
+    fill: none;
+    stroke: color-mix(in oklab, var(--bundle-text-primary) 50%, transparent);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke; /* Consistent stroke width regardless of SVG scale */
+  }
+
+  /* Variant image thumbnail (shown when swatch_style == 'image') */
+  .bundle-page__swatch-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Fill the square, crop overflow */
+    border-radius: 0.14rem;
+  }
+
+  /* Hex color block (shown when swatch_style == 'color' or no variant image) */
+  .bundle-page__swatch-color {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 0.14rem;
+  }
+
+  /* Visual gap between standard and special edition swatches.
+     Matches Rubik's lr-separator on the standard PDP (1px wide, swatch-height,
+     16% black, 4px inline margin). */
+  .bundle-page__swatch-le-gap {
+    width: 1px;
+    height: var(--bundle-swatch-size);
+    background: rgba(0, 0, 0, 0.16);
+    margin-inline: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  /* "Limited Run" pill — hangs below the swatch so color stays visible */
+  .bundle-page__swatch-badge {
+    position: absolute;
+    bottom: -0.45rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.375rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: var(--bundle-text-primary);
+    color: var(--bundle-bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: 999px;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ---- Dual CTA — Add to Cart (left) + Give as Gift (right) ----
+     Two-column grid on desktop, becomes fixed bottom bar on mobile */
+  .bundle-page__dual-cta {
+    margin-bottom: var(--bundle-space-lg);
+    padding-top: var(--bundle-space-lg);
+  }
+
+  /* Two equal columns when gift CTA is active */
+  .bundle-page__dual-cta-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+  }
+
+  /* Full-width single column when gift CTA is hidden */
+  .bundle-page__dual-cta-inner--single {
+    grid-template-columns: 1fr;
+  }
+
+  .bundle-page__cta-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .bundle-page__add-to-cart {
+    position: relative;
+    width: 340px;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
+  /* Disabled state while cart submission is in progress (prevents double-click) */
+  .bundle-page__add-to-cart:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ---- Unavailable state — replaces Add to cart when the bundle can't be built ----
+     Mirrors the collection card's notify block: a small "Currently unavailable"
+     label stacked above a presentational "Get Notified" button. */
+  .bundle-page__notify {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .bundle-page__notify-label {
+    font-size: 0.875rem;
+    color: var(--bundle-text-secondary);
+  }
+
+  .bundle-page__notify-button {
+    width: 340px;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
+  /* CTA area counter caption — second instance of "X of Y chosen" */
+  .bundle-page__counter-caption {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--bundle-text-primary);
+    text-align: center;
+    transition: color 140ms var(--bundle-ease-out);
+  }
+
+  /* Error state on CTA counter (matches build header counter error) */
+  .bundle-page__counter-caption--error {
+    color: var(--bundle-required);
+  }
+
+  /* Lay out the gift icon + label in a centered row (base .button is display: grid).
+     The icon matches the add-to-cart icon size through the shared .svg-wrapper sizing. */
+  .bundle-page__gift-button.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--gap-2xs, 0.5rem);
+  }
+
+  /* Gift icon — brand orange from reference (overrides .svg-wrapper currentColor),
+     sized 20% larger than the default icon size */
+  .bundle-page__gift-icon {
+    flex: none;
+    color: #c0531c;
+  }
+
+  .bundle-page__gift-icon,
+  .bundle-page__gift-icon > svg {
+    width: calc(var(--icon-size-sm) * 1.2);
+    height: calc(var(--icon-size-sm) * 1.2);
+  }
+
+  /* Cross-sell — "Also made by None Better"
+     Desktop uses CSS grid; mobile uses horizontal carousel with arrows.
+     Cards show image, name, price, and variant swatches.
+     Spec: header 14px/500, card padding 12px, border-radius 8px. */
+  .bundle-page__cross-sell {
+    padding-top: var(--bundle-space-lg);
+  }
+
+  /* Carousel wrapper — transparent on desktop */
+  .bundle-page__cross-sell-carousel {
+    display: contents;
+  }
+
+  /* Hide arrows on desktop */
+  .bundle-page__cross-sell-arrow {
+    display: none;
+  }
+
+  .bundle-page__cross-sell-header {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--bundle-text-secondary);
+    margin: 0 0 var(--bundle-space-sm);
+  }
+
+  /* Hide any inline formatting injected by rich text editors in the translation */
+  .bundle-page__cross-sell-header em,
+  .bundle-page__cross-sell-header i,
+  .bundle-page__cross-sell-header small {
+    display: none;
+  }
+
+  /* Cross-sell grid — left-aligned 242px columns to match the PDP template */
+  .bundle-page__cross-sell-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 242px);
+    justify-content: start;
+    gap: 16px;
+  }
+
+  /* Default card: image on top, name + price centered below */
+  .bundle-page__cross-sell-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.375rem;
+    padding: 0 0 0.5rem;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: 0.5rem;
+    background: var(--bundle-bg);
+    text-decoration: none;
+    text-align: center;
+    overflow: hidden;
+    min-width: 0;
+    width: 100%;
+    max-width: 242px;
+    justify-self: start;
+    transition: transform 140ms var(--bundle-ease-out);
+  }
+
+
+
+  /* Hover: subtle lift */
+  .bundle-page__cross-sell-card:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Skeleton loading card — animated gradient shimmer shown while API loads */
+  .bundle-page__cross-sell-card--skeleton {
+    min-height: 5rem;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--bundle-bg) 86%, var(--bundle-text-primary) 14%) 0%,
+      color-mix(in oklab, var(--bundle-bg) 94%, var(--bundle-text-primary) 6%) 50%,
+      color-mix(in oklab, var(--bundle-bg) 86%, var(--bundle-text-primary) 14%) 100%
+    );
+    background-size: 200% 100%;
+    animation: bundle-page-cross-sell-loading 1.1s linear infinite;
+  }
+
+  /* Hidden state — JS removes this class after recommendations load */
+  .bundle-page__cross-sell.hidden {
+    display: none;
+  }
+
+  /* Product image — fills card width up to a max, uniform height via aspect-ratio */
+  .bundle-page__cross-sell-image {
+    width: 100%;
+    max-width: 10rem;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  /* Name + price wrapper — stacked vertically on desktop */
+  .bundle-page__cross-sell-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    gap: 0.125rem;
+  }
+
+  /* Product name inside cross-sell card */
+  .bundle-page__cross-sell-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--bundle-text-primary);
+  }
+
+  /* Product price inside cross-sell card */
+  .bundle-page__cross-sell-price {
+    font-size: 0.875rem;
+    color: var(--bundle-text-secondary);
+  }
+
+  /* ---- Cross-sell variant swatches ---- */
+  .bundle-page__cross-sell-swatches {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .bundle-page__cross-sell-card {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bundle-page__cross-sell-swatch {
+    -webkit-tap-highlight-color: transparent;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1.5px solid var(--bundle-border-tertiary, rgba(0, 0, 0, 0.25));
+    border-radius: 0.2rem;
+    background: var(--bundle-bg, #FFFFFF);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 140ms ease;
+  }
+
+  .bundle-page__cross-sell-swatch img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .bundle-page__cross-sell-swatch:hover,
+  .bundle-page__cross-sell-swatch--active {
+    border-color: var(--bundle-text-primary, #1F1F1E);
+  }
+
+  .bundle-page__cross-sell-swatch-overflow {
+    font-size: 0.75rem;
+    color: var(--bundle-text-secondary, #888780);
+    font-weight: 500;
+    padding-left: 0.125rem;
+  }
+
+  /* Button Overrides — Primary (dark) and Secondary (outlined) variants
+     Scoped to .bundle-page to avoid leaking into global button styles. */
+  .bundle-page .button {
+    min-height: 3rem;
+    border-radius: 0.7rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition:
+      transform 140ms var(--bundle-ease-out),
+      background-color 140ms var(--bundle-ease-out),
+      color 140ms var(--bundle-ease-out),
+      border-color 140ms var(--bundle-ease-out),
+      box-shadow 140ms var(--bundle-ease-out);
+  }
+
+  .bundle-page .button:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Primary button: dark background, white text (used for "Add to cart") */
+  .bundle-page .button--primary {
+    background: var(--bundle-text-primary);
+    border: 1px solid var(--bundle-text-primary);
+    border-color: var(--bundle-text-primary);
+    color: var(--bundle-bg);
+  }
+
+  /* Secondary button: outlined, slightly shorter (used for "Give as a gift") */
+  .bundle-page .button--secondary {
+    background: var(--bundle-bg);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    color: var(--bundle-text-primary);
+    min-height: 2.75rem; /* Slightly shorter than primary (3rem) */
+  }
+
+  /* Larger CTA text — overrides the smaller .bundle-page .button text size.
+     Combining each button's own class with .button raises specificity above
+     the shared .bundle-page .button rule (and sits later in source order). */
+  .bundle-page__gift-button.button,
+  .bundle-page__add-to-cart.button,
+  .bundle-page__notify-button.button {
+    font-size: 1.25rem; /* 20px */
+    font-weight: 600;
+  }
+
+  /* ---- Desktop (≥900px) — more generous inner card padding ---- */
+  @media screen and (min-width: 900px) {
+    .bundle-page__inner {
+      padding-inline: clamp(2rem, 5vw, 3rem);
+      padding-block: clamp(1.5rem, 3vw, 2.25rem);
+    }
+  }
+
+  /* Mobile (<750px)
+     - Reduced padding on outer and inner containers
+     - Dual CTA becomes a fixed bottom bar (position: fixed)
+     - Add-to-cart and counter sit side-by-side in a row
+     - Gift caption hidden to save space
+     - Page reserves bottom padding to clear the fixed CTA bar
+     - Swatches use larger touch target size (swatch-size-mobile) */
+  @media screen and (max-width: 749px) {
+    /* Tighter outer padding on mobile */
+    .bundle-page {
+      padding-inline: var(--bundle-space-sm);
+      padding-block-start: calc(var(--header-group-height, var(--header-height, 60px)) + var(--bundle-space-sm));
+      /* Reserve room for the fixed bottom CTA bar (incl. iOS safe area) so no
+         content is ever hidden behind it, regardless of cross-sell visibility. */
+      padding-block-end: calc(9.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Tighter inner card padding */
+    .bundle-page__inner {
+      padding: var(--bundle-space-md);
+    }
+
+    .bundle-page__title {
+      font-size: 1.5rem;
+    }
+
+    .bundle-page__description {
+      font-size: 1.0625rem;
+      margin-bottom: var(--bundle-space-lg);
+      font-style: normal;
+      display: block;
+      -webkit-line-clamp: none;
+      overflow: visible;
+    }
+
+    .bundle-page__picker-title {
+      font-size: 19px;
+      font-weight: 600;
+    }
+
+    /* Fixed bottom bar — sticks to viewport bottom on mobile */
+    .bundle-page__dual-cta {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bundle-bg);
+      padding: var(--bundle-space-sm) var(--bundle-space-md);
+      /* Keep the bar's contents above the iOS home indicator / browser chrome */
+      padding-bottom: calc(var(--bundle-space-sm) + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid var(--bundle-border-tertiary);
+      z-index: var(--layer-sticky, 100);
+      margin-bottom: 0;
+    }
+
+    /* Stack CTA columns into single column on mobile */
+    .bundle-page__dual-cta-inner {
+      grid-template-columns: 1fr;
+      gap: var(--bundle-space-xs);
+    }
+
+    /* Button + counter side-by-side in a row (not stacked) */
+    .bundle-page__cta-left {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Button takes remaining space, counter stays compact */
+    .bundle-page__add-to-cart {
+      flex: 1;
+      width: auto;
+      max-width: none;
+      margin-inline: 0;
+    }
+
+    .bundle-page__counter-caption {
+      text-align: right;
+      white-space: nowrap; /* Prevent "0 of 4 chosen" from wrapping */
+      margin-left: var(--bundle-space-xs);
+    }
+
+    /* ---- Mobile carousel for cross-sell ---- */
+    .bundle-page__cross-sell-carousel {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0.25rem;
+    }
+
+    /* Horizontal scroll container — fit multiple cards, next one peeks */
+    .bundle-page__cross-sell-grid {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 1rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bundle-page__cross-sell-grid::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Cards sized so one is fully visible with the next one peeking ~50% */
+    .bundle-page__cross-sell-card {
+      flex: 0 0 65%;
+      scroll-snap-align: start;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 0.375rem;
+      border: 2px solid rgba(0, 0, 0, 0.5);
+      border-radius: 0.5rem;
+      padding: 0.75rem 0.5rem;
+    }
+
+    /* Image on mobile */
+    .bundle-page__cross-sell-image {
+      width: 100%;
+      max-width: 7.5rem;
+      aspect-ratio: 1 / 1;
+    }
+
+    /* Info and swatches centered within card */
+    .bundle-page__cross-sell-info {
+      flex-direction: column;
+      align-items: center;
+      gap: 0.125rem;
+    }
+
+    .bundle-page__cross-sell-swatches {
+      justify-content: center;
+    }
+
+    /* Arrow buttons — small circles */
+    .bundle-page__cross-sell-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 50%;
+      border: 1px solid var(--bundle-border-secondary, rgba(0, 0, 0, 0.2));
+      background: var(--bundle-bg, #FFFFFF);
+      color: var(--bundle-text-primary, #1F1F1E);
+      cursor: pointer;
+      flex-shrink: 0;
+      z-index: 1;
+      transition: background 140ms ease, border-color 140ms ease;
+    }
+
+    .bundle-page__cross-sell-arrow:hover {
+      background: var(--bundle-text-primary, #1F1F1E);
+      color: var(--bundle-bg, #FFFFFF);
+    }
+
+
+    /* Larger touch targets for swatch buttons on mobile */
+    .bundle-page__swatch {
+      width: var(--bundle-swatch-size-mobile);
+      height: var(--bundle-swatch-size-mobile);
+    }
+  }
+
+  /* Extra-small screens (<390px) — stack build header vertically */
+  @media screen and (max-width: 389px) {
+    .bundle-page__build-header {
+      gap: var(--bundle-space-xs);
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
+  /* Skeleton shimmer animation — slides gradient left-to-right infinitely */
+  @keyframes bundle-page-cross-sell-loading {
+    from {
+      background-position: 100% 0;
+    }
+
+    to {
+      background-position: -100% 0;
+    }
+  }
+{% endstylesheet %}
+
+{% comment %}
+  ==============================================================================
+  JAVASCRIPT — Web Component Registration
+  ==============================================================================
+  Defines <bundle-page> custom element. On connectedCallback, dynamically
+  imports the BundleConfigurator module (URL from data-configurator-src).
+  BundleConfigurator handles all client-side behavior:
+  - Color swatch selection and validation
+  - Outline composition image updates
+  - Counter updates ("X of Y chosen")
+  - Add-to-cart submission (separate line items with _bundle_tag property)
+  - Cross-sell recommendations fetch and render
+  ==============================================================================
+{% endcomment %}
+{% javascript %}
+  class BundlePage extends HTMLElement {
+    constructor() {
+      super();
+      this.configurator = null;
+    }
+
+    connectedCallback() {
+      import(this.dataset.configuratorSrc)
+        .then((module) => {
+          this.configurator = new module.BundleConfigurator(this);
+        })
+        .catch((err) => {
+          console.error('Failed to load bundle configurator:', err);
+        });
+    }
+  }
+
+  customElements.define('bundle-page', BundlePage);
+{% endjavascript %}
+
+{% comment %}
+  ==============================================================================
+  SCHEMA — Section Settings
+  ==============================================================================
+  Theme editor settings for this section:
+  - Swatch style: 'color' (hex blocks) or 'image' (variant images)
+  - Recommendation type: 'related' or 'complementary' (Shopify API intent)
+  - Maximum products: 1-6 range slider for cross-sell card count
+
+  Note: Cross-sell layout (columns, card direction) is NOT a section setting —
+  it comes from the Cross Sell Setting metaobject per product, so merchants
+  configure it per bundle rather than globally.
+  ==============================================================================
+{% endcomment %}
+{% schema %}
+{
+  "name": "t:names.bundle_page",
+  "tag": "section",
+  "class": "bundle-page-section",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "Bundle Page"
+    },
+    {
+      "type": "paragraph",
+      "content": "This section renders a configurable bundle product page. It reads bundle composition from the product's constituent_items metafield and color swatches from each constituent product's native variant options."
+    },
+    {
+      "type": "header",
+      "content": "Swatches"
+    },
+    {
+      "type": "select",
+      "id": "swatch_style",
+      "label": "Swatch style",
+      "options": [
+        {
+          "value": "color",
+          "label": "Color"
+        },
+        {
+          "value": "image",
+          "label": "Image"
+        }
+      ],
+      "default": "image"
+    },
+    {
+      "type": "header",
+      "content": "Recommendations"
+    },
+    {
+      "type": "select",
+      "id": "recommendation_type",
+      "label": "Recommendation type",
+      "options": [
+        {
+          "value": "related",
+          "label": "Related"
+        },
+        {
+          "value": "complementary",
+          "label": "Complementary"
+        }
+      ],
+      "default": "complementary"
+    },
+    {
+      "type": "range",
+      "id": "max_products",
+      "label": "Maximum products",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 3
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:names.bundle_page"
+    }
+  ]
+}
+{% endschema %}

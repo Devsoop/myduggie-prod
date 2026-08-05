@@ -1,0 +1,22 @@
+{%- comment -%}
+Free shipping message (cart + drawer)
+Rules:
+- Threshold: $90 (post-discount) = cart.total_price
+- When met: "<strong>Free shipping</strong> applied."
+- When not met: "<strong>$X</strong> away from free shipping."
+- X rounded up to whole dollars
+- Hide when cart is empty
+{%- endcomment -%}
+
+{%- if cart.item_count > 0 -%}
+  {%- assign threshold_cents = 10000 -%}
+  {%- assign cart_total_cents = cart.total_price -%}
+  {%- assign remaining_cents = threshold_cents | minus: cart_total_cents -%}
+
+  {%- if remaining_cents <= 0 -%}
+    <p><strong>Free shipping</strong> applied.</p>
+  {%- else -%}
+    {%- assign remaining_dollars = remaining_cents | plus: 99 | divided_by: 100 -%}
+    <p><strong>${{ remaining_dollars }}</strong> away from free shipping.</p>
+  {%- endif -%}
+{%- endif -%}

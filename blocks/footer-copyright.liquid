@@ -1,0 +1,151 @@
+
+{% stylesheet %}
+  @media screen and (max-width: 749px) {
+    .footer-utilities__group-copyright {
+      align-items: center;
+      text-align: center;
+    }
+
+    .footer-utilities__logo {
+      margin-inline: auto;
+    }
+  }
+{% endstylesheet %}
+
+{% assign block_settings = block.settings %}
+<div
+  class="
+    footer-utilities__group-copyright
+    custom-typography
+    {% if block_settings.font_size != "" %}custom-font-size{% endif %}
+  "
+  style="{% render 'typography-style', preset: 'custom', settings: block_settings %}"
+  {{ block.shopify_attributes }}
+>
+  {%- if block_settings.logo != blank -%}
+    {%- assign logo_width_2x = block_settings.logo_width | times: 2 -%}
+    <div class="footer-utilities__logo" style="margin-bottom: {{ block_settings.logo_spacing }}px; width: {{ block_settings.logo_width }}px;">
+      <img
+        src="{{ block_settings.logo | image_url: width: logo_width_2x }}"
+        alt="{{ block_settings.logo.alt | default: shop.name | escape }}"
+        width="{{ block_settings.logo_width }}"
+        height="auto"
+        loading="lazy"
+        style="width: 100%; height: auto;"
+      >
+    </div>
+  {%- endif -%}
+  <span class="footer-utilities__text" style="margin-left: {{ block_settings.text_offset_x }}px;">
+    &copy; {{ 'now' | date: '%Y' }}
+    {{ shop.name | link_to: routes.root_url -}}
+    {%- if block_settings.show_powered_by -%}
+      , {{ powered_by_link }}
+    {%- endif -%}
+  </span>
+</div>
+
+{% schema %}
+{
+  "name": "t:names.copyright",
+  "tag": null,
+  "settings": [
+    {
+      "type": "image_picker",
+      "id": "logo",
+      "label": "Logo image"
+    },
+    {
+      "type": "range",
+      "id": "logo_width",
+      "label": "Logo width",
+      "min": 40,
+      "max": 200,
+      "step": 5,
+      "unit": "px",
+      "default": 100,
+      "visible_if": "{{ block.settings.logo != blank }}"
+    },
+    {
+      "type": "range",
+      "id": "logo_spacing",
+      "label": "Space below logo",
+      "min": 0,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 8,
+      "visible_if": "{{ block.settings.logo != blank }}"
+    },
+    {
+      "type": "range",
+      "id": "text_offset_x",
+      "label": "Copyright text horizontal offset",
+      "min": -50,
+      "max": 50,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "checkbox",
+      "id": "show_powered_by",
+      "label": "t:settings.show_powered_by_shopify",
+      "default": true
+    },
+    {
+      "type": "paragraph",
+      "content": "t:content.manage_store_name"
+    },
+    {
+      "type": "select",
+      "id": "font_size",
+      "label": "t:settings.size",
+      "options": [
+        {
+          "value": "0.625rem",
+          "label": "10px"
+        },
+        {
+          "value": "0.75rem",
+          "label": "12px"
+        },
+        {
+          "value": "0.875rem",
+          "label": "14px"
+        },
+        {
+          "value": "1rem",
+          "label": "16px"
+        },
+        {
+          "value": "1.125rem",
+          "label": "18px"
+        }
+      ],
+      "default": "0.75rem"
+    },
+    {
+      "type": "select",
+      "id": "case",
+      "label": "t:settings.case",
+      "options": [
+        {
+          "value": "none",
+          "label": "t:options.default"
+        },
+        {
+          "value": "uppercase",
+          "label": "t:options.uppercase"
+        }
+      ],
+      "default": "none"
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:names.copyright",
+      "category": "t:categories.footer"
+    }
+  ]
+}
+{% endschema %}

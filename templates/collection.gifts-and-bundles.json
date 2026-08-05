@@ -1,0 +1,15 @@
+{
+  "sections": {
+    "bundle_grid": {
+      "type": "bundle-collection",
+      "settings": {
+        "heading": "Gifts & Bundles",
+        "subheading": "Curated bundles for yourself or someone else.",
+        "color_scheme": "scheme-1",
+        "padding-block-start": 48,
+        "padding-block-end": 48
+      }
+    }
+  },
+  "order": ["bundle_grid"]
+}

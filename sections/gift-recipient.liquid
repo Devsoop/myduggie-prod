@@ -1,0 +1,993 @@
+{% comment %}
+  ============================================================================
+  GIFT RECIPIENT (M8 / Build Guide Page 7)
+  ============================================================================
+  Where a recipient lands after clicking the link in their gift email. Shows
+  a banner ("{recipient} — a gift from {gifter}."), an optional personal
+  note, then the same bundle configurator used on the bundle product page
+  (hero, description, outline composition, color pickers) — framed as
+  receiving rather than buying. No gift-CTA divider, no cross-sell row.
+
+  Route: /pages/gift-recipient?token={token} — NOT /pages/recipient/{token}.
+  Shopify page templates key off a fixed page handle; they don't support
+  dynamic path segments, so the token travels as a query param, same
+  convention as ?bundle= on gift-checkout/gift-review. See
+  docs/decisions/milestone-8-recipient-page.md.
+
+  Liquid can't read the token or call the custom app at render time, so this
+  section server-renders the FULL configurator markup for every bundle in
+  the gifts-and-bundles collection, one hidden block per bundle
+  (data-bundle-slug). gift-recipient.js resolves the token via the app,
+  then reveals only the matching block and instantiates BundleConfigurator
+  against it — reusing that class unmodified.
+
+  Data in:  ?token= (URL) -> custom app's gift-resolution endpoint.
+  Data out: Shopify Storefront API cart (cartCreate + cartGiftCardCodesUpdate)
+            -> Shopify checkout (recipient enters shipping only).
+  ============================================================================
+{% endcomment %}
+{% liquid
+  assign bundle_collection = collections['gifts-bundles']
+  if bundle_collection.products.size == 0
+    assign bundle_collection = collections['gifts-and-bundles']
+  endif
+  assign gift_js_url = 'gift-recipient.js' | asset_url
+  assign configurator_asset_url = 'bundle-configurator.js' | asset_url
+  assign swatch_style = section.settings.swatch_style | default: 'image'
+%}
+
+<gift-recipient
+  class="gift-recipient"
+  data-gift-src="{{ gift_js_url }}"
+  data-configurator-src="{{ configurator_asset_url }}"
+  data-gift-api-base="{{ section.settings.gift_api_base_url | default: 'https://oyster-app-3c672.ondigitalocean.app' | escape }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
+  data-storefront-token="{{ section.settings.storefront_access_token }}"
+  data-collection-url="{{ bundle_collection.url | default: '/collections/gifts-and-bundles' }}"
+  data-receive-label="{{ 'gift_recipient.receive_gift' | t | escape }}"
+  data-receive-loading-label="{{ 'gift_recipient.receive_gift_loading' | t | escape }}"
+  data-receive-error-label="{{ 'gift_recipient.receive_gift_error' | t | escape }}"
+  data-banner-template="{{ 'gift_recipient.banner' | t: recipient: '__RECIPIENT__', gifter: '__GIFTER__' | escape }}"
+  data-price-line-template="{{ 'gift_recipient.price_line' | t: price: '__PRICE__', gifter: '__GIFTER__' | escape }}"
+  {{ section.shopify_attributes }}
+>
+  {% comment %}
+    ------------------------------------------------------------------------
+    Per-bundle configurator data — resolved client-side against the
+    bundle_slug the app's token response returns. Mirrors the hidden
+    per-bundle JSON blob pattern in gift-checkout.liquid/gift-review.liquid,
+    but here the bundle needs its full configurator markup (not just a JSON
+    summary) because pickers/outline/hero require real per-product Liquid.
+    ------------------------------------------------------------------------
+  {% endcomment %}
+
+  {% comment %} ---- PREPARING state (token valid, gift card not yet created) ---- {% endcomment %}
+  <div class="gift-recipient__state" data-state="preparing" hidden>
+    <div class="gift-recipient__status-card">
+      <h1 class="gift-recipient__status-heading">{{ 'gift_recipient.preparing_heading' | t }}</h1>
+      <p class="gift-recipient__status-body">{{ 'gift_recipient.preparing_body' | t }}</p>
+    </div>
+  </div>
+
+  {% comment %} ---- ERROR state (invalid/expired/unknown token, or app lookup failure) ---- {% endcomment %}
+  <div class="gift-recipient__state" data-state="error" hidden>
+    <div class="gift-recipient__status-card">
+      <h1 class="gift-recipient__status-heading">{{ 'gift_recipient.error_heading' | t }}</h1>
+      <p class="gift-recipient__status-body">{{ 'gift_recipient.error_body' | t }}</p>
+    </div>
+  </div>
+
+  {% comment %} ---- ALREADY REDEEMED state ---- {% endcomment %}
+  <div class="gift-recipient__state" data-state="redeemed" hidden>
+    <div class="gift-recipient__status-card">
+      <h1 class="gift-recipient__status-heading">{{ 'gift_recipient.already_redeemed_heading' | t }}</h1>
+      <p class="gift-recipient__status-body">{{ 'gift_recipient.already_redeemed_body' | t }}</p>
+    </div>
+  </div>
+
+  {% comment %} ---- READY state — banner, note, bundle configurator ---- {% endcomment %}
+  <div class="gift-recipient__state" data-state="ready" hidden>
+    <div class="gift-recipient__inner page-width">
+      {% comment %}
+        Banner + description + note share one block, inside the same card as
+        the bundle title/configurator below it (matches the approved design
+        mockup — one continuous box, not two stacked boxes, with the
+        personal/warm content grouped together). The banner always renders —
+        the note-specific block below it ([data-note-card]) hides via JS when
+        buyer_note is empty.
+
+        The description is per-bundle metafield data, but this card renders
+        once, shared across every hidden per-bundle block below. So each
+        bundle gets its own hidden description paragraph here, tagged with
+        its slug, and gift-recipient.js reveals the one matching the resolved
+        bundle_slug — same reveal mechanism as the bundle blocks themselves.
+      {% endcomment %}
+      <div class="gift-recipient__card">
+        <h1 class="gift-recipient__banner" data-banner></h1>
+
+        {% comment %}
+          No fallback to bundle.description here (unlike bundle-page.liquid) —
+          that field is raw rich-text HTML from the product's standard
+          Description field and can carry its own heading/bold formatting,
+          which clashes with this card's plain-text tagline styling. A bundle
+          without an explicit custom.tagline just shows no description.
+        {% endcomment %}
+        {% for bundle in bundle_collection.products %}
+          {% liquid
+            assign card_bundle_description = bundle.metafields.custom.tagline.value
+          %}
+          {% if card_bundle_description != blank %}
+            <p class="gift-recipient__description" data-bundle-slug="{{ bundle.handle }}" hidden>{{ card_bundle_description }}</p>
+          {% endif %}
+        {% endfor %}
+
+        <div class="gift-recipient__note" data-note-card hidden>
+          <p class="gift-recipient__note-body" data-note-body></p>
+        </div>
+      </div>
+
+      {% for bundle in bundle_collection.products %}
+        {% liquid
+          assign constituent_items = bundle.metafields.custom.constituent_items.value
+          if constituent_items == blank
+            assign constituent_items = bundle.metafields.custom.constituent_items
+          endif
+          assign item_overrides = bundle.metafields.custom.constituent_items_overrides.value
+          assign item_count = constituent_items.size | default: 0
+          assign hero_media = bundle.metafields.custom.hero_media.value
+        %}
+
+        <div
+          class="gift-recipient__bundle"
+          data-bundle-slug="{{ bundle.handle }}"
+          data-product-id="{{ bundle.id }}"
+          data-product-handle="{{ bundle.handle }}"
+          data-product-title="{{ bundle.title | escape }}"
+          data-item-count="{{ item_count }}"
+          hidden
+        >
+          {% comment %} ---- Title block: bundle name + price line (gifter's name substituted, JS) ---- {% endcomment %}
+          <div class="gift-recipient__title-block">
+            <h2 class="gift-recipient__title">{{ bundle.title | escape }}</h2>
+            <p class="gift-recipient__price-line" data-price-line data-price="{{ bundle.price | money }}"></p>
+          </div>
+
+          {% comment %} ---- Hero — identical behavior to bundle-page.liquid ---- {% endcomment %}
+          {% if hero_media %}
+            <div class="gift-recipient__hero">
+              {% if hero_media.media_type == 'video' %}
+                <video class="gift-recipient__hero-video" autoplay muted playsinline preload="auto">
+                  {% for source in hero_media.sources %}
+                    <source src="{{ source.url }}" type="{{ source.mime_type }}">
+                  {% endfor %}
+                </video>
+              {% else %}
+                {{
+                  hero_media
+                  | image_url: width: 1200
+                  | image_tag: loading: 'eager', alt: bundle.title, class: 'gift-recipient__hero-image'
+                }}
+              {% endif %}
+            </div>
+          {% elsif bundle.featured_image %}
+            <div class="gift-recipient__hero">
+              {{
+                bundle.featured_image
+                | image_url: width: 1200
+                | image_tag: loading: 'eager', alt: bundle.title, class: 'gift-recipient__hero-image'
+              }}
+            </div>
+          {% endif %}
+
+          {% comment %} ---- Description now lives in the shared banner/note card above (Group 1) — see that block ---- {% endcomment %}
+
+          {% comment %} ---- Build header + counter ---- {% endcomment %}
+          <div class="gift-recipient__build-header">
+            <span class="gift-recipient__build-label">
+              {{ 'gift_recipient.choose_your_colors' | t }}
+            </span>
+            <span class="gift-recipient__counter" data-bundle-counter data-total="{{ item_count }}">
+              <span data-counter-current>0</span>
+              {{ 'bundles.of' | t }}
+              {{ item_count }}
+              {{ 'bundles.chosen' | t }}
+            </span>
+          </div>
+
+          {% comment %} ---- Outline composition — unmodified shared snippet ---- {% endcomment %}
+          {% render 'bundle-outline-composition', constituent_items: constituent_items, item_count: item_count %}
+
+          {% comment %} ---- Pickers — same markup/data-attributes as bundle-page.liquid ---- {% endcomment %}
+          <div class="gift-recipient__pickers bundle-page__pickers">
+            {% for item in constituent_items %}
+              {% liquid
+                assign item_product = item
+                if item.type == 'product_reference'
+                  assign item_product = item.value
+                elsif item.id
+                  assign item_product = item
+                endif
+
+                assign color_option = nil
+                for opt in item_product.options_with_values
+                  assign opt_handle = opt.name | handleize
+                  if opt_handle == 'color' or opt_handle == 'colour'
+                    assign color_option = opt
+                    break
+                  endif
+                endfor
+
+                assign picker_display_title = item_product.title
+                assign picker_item_note = ''
+                if item_overrides != blank
+                  for override in item_overrides
+                    assign override_product = override.linked_product.value | default: override.linked_product
+                    if override_product.id == item_product.id
+                      assign raw_display_title = override.display_title.value | default: override.display_title
+                      if raw_display_title != blank
+                        assign picker_display_title = raw_display_title
+                      endif
+                      assign raw_note = override.note.value | default: override.note
+                      if raw_note != blank
+                        assign picker_item_note = raw_note
+                      endif
+                      break
+                    endif
+                  endfor
+                endif
+              %}
+
+              {% if item_product != blank %}
+                <div
+                  class="bundle-page__picker"
+                  data-picker-index="{{ forloop.index0 }}"
+                  data-product-id="{{ item_product.id }}"
+                  data-product-handle="{{ item_product.handle }}"
+                >
+                  <div class="bundle-page__picker-header">
+                    <h3 class="bundle-page__picker-title">{{ picker_display_title | escape }}</h3>
+                    <p class="bundle-page__picker-helper">{{ 'bundles.choose_one' | t }}</p>
+                  </div>
+
+                  {% if color_option != blank and color_option.values.size > 0 %}
+                    <div class="bundle-page__swatches">
+                      {% for option_value in color_option.values %}
+                        {% liquid
+                          assign color_name = option_value.name
+                          assign option_value_handle = color_name | handleize
+                          assign color_hex = ''
+                          assign is_special = false
+                          for color_mo in shop.metaobjects.color.values
+                            assign mo_name = color_mo.name | default: color_mo.fields.name.value | handleize
+                            if mo_name == option_value_handle
+                              assign color_hex = color_mo.hex | default: color_mo.fields.hex.value
+                              if color_mo.is_special_edition == true
+                                assign is_special = true
+                              elsif color_mo.fields.is_special_edition.value == true
+                                assign is_special = true
+                              endif
+                              break
+                            endif
+                          endfor
+                        %}
+
+                        {% unless is_special %}
+                          {% liquid
+                            assign is_available = option_value.available
+                            if option_value.variant.inventory_management != blank and option_value.variant.inventory_quantity <= 0
+                              assign is_available = false
+                            endif
+                            assign variant_id = option_value.variant.id | default: ''
+                            assign featured_media = option_value.variant.featured_media
+                            assign show_swatch_image = false
+                            if swatch_style == 'image' and featured_media
+                              assign show_swatch_image = true
+                            endif
+                            assign variant_image_url = ''
+                            if featured_media
+                              assign variant_image_url = featured_media | image_url: width: 300
+                            endif
+                          %}
+
+                          <button
+                            type="button"
+                            class="bundle-page__swatch{% unless is_available %} bundle-page__swatch--unavailable{% endunless %}"
+                            data-swatch
+                            data-color-name="{{ color_name | escape }}"
+                            data-color-hex="{{ color_hex | escape }}"
+                            data-variant-id="{{ variant_id }}"
+                            data-variant-image="{{ variant_image_url }}"
+                            data-product-id="{{ item_product.id }}"
+                            data-product-handle="{{ item_product.handle }}"
+                            data-picker-index="{{ forloop.parentloop.index0 }}"
+                            data-is-special="false"
+                            {% unless is_available %}disabled{% endunless %}
+                            aria-label="{{ color_name | escape }}"
+                            title="{{ color_name | escape }}"
+                          >
+                            {% if show_swatch_image %}
+                              {{ featured_media | image_url: width: 96 | image_tag: loading: 'lazy', alt: color_name, class: 'bundle-page__swatch-image' }}
+                            {% else %}
+                              <span class="bundle-page__swatch-color" style="background-color: {{ color_hex | default: '#cccccc' }};"></span>
+                            {% endif %}
+                            {% unless is_available %}
+                              <span class="bundle-page__swatch-unavailable-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false" role="presentation"><path d="M25 -1L-1 25" /></svg>
+                              </span>
+                            {% endunless %}
+                          </button>
+                        {% endunless %}
+                      {% endfor %}
+
+                      {% assign le_gap_inserted = false %}
+                      {% for option_value in color_option.values %}
+                        {% liquid
+                          assign color_name = option_value.name
+                          assign option_value_handle = color_name | handleize
+                          assign color_hex = ''
+                          assign is_special = false
+                          for color_mo in shop.metaobjects.color.values
+                            assign mo_name = color_mo.name | default: color_mo.fields.name.value | handleize
+                            if mo_name == option_value_handle
+                              assign color_hex = color_mo.hex | default: color_mo.fields.hex.value
+                              if color_mo.is_special_edition == true
+                                assign is_special = true
+                              elsif color_mo.fields.is_special_edition.value == true
+                                assign is_special = true
+                              endif
+                              break
+                            endif
+                          endfor
+                        %}
+
+                        {% if is_special %}
+                          {% liquid
+                            assign is_available = option_value.available
+                            if option_value.variant.inventory_management != blank and option_value.variant.inventory_quantity <= 0
+                              assign is_available = false
+                            endif
+                            assign variant_id = option_value.variant.id | default: ''
+                            assign featured_media = option_value.variant.featured_media
+                            assign show_swatch_image = false
+                            if swatch_style == 'image' and featured_media
+                              assign show_swatch_image = true
+                            endif
+                            assign variant_image_url = ''
+                            if featured_media
+                              assign variant_image_url = featured_media | image_url: width: 300
+                            endif
+                          %}
+
+                          {% if le_gap_inserted == false %}
+                            <span class="bundle-page__swatch-le-gap" aria-hidden="true"></span>
+                            {% assign le_gap_inserted = true %}
+                          {% endif %}
+
+                          <button
+                            type="button"
+                            class="bundle-page__swatch{% unless is_available %} bundle-page__swatch--unavailable{% endunless %}"
+                            data-swatch
+                            data-color-name="{{ color_name | escape }}"
+                            data-color-hex="{{ color_hex | escape }}"
+                            data-variant-id="{{ variant_id }}"
+                            data-variant-image="{{ variant_image_url }}"
+                            data-product-id="{{ item_product.id }}"
+                            data-product-handle="{{ item_product.handle }}"
+                            data-picker-index="{{ forloop.parentloop.index0 }}"
+                            data-is-special="true"
+                            {% unless is_available %}disabled{% endunless %}
+                            aria-label="{{ color_name | escape }}"
+                            title="{{ color_name | escape }}"
+                          >
+                            {% if show_swatch_image %}
+                              {{ featured_media | image_url: width: 96 | image_tag: loading: 'lazy', alt: color_name, class: 'bundle-page__swatch-image' }}
+                            {% else %}
+                              <span class="bundle-page__swatch-color" style="background-color: {{ color_hex | default: '#cccccc' }};"></span>
+                            {% endif %}
+                            <span class="bundle-page__swatch-badge">{{ 'bundles.special_edition_badge' | t }}</span>
+                            {% unless is_available %}
+                              <span class="bundle-page__swatch-unavailable-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false" role="presentation"><path d="M25 -1L-1 25" /></svg>
+                              </span>
+                            {% endunless %}
+                          </button>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <p class="bundle-page__no-colors">{{ 'bundles.no_colors_available' | t }}</p>
+                  {% endif %}
+
+                  {% if picker_item_note != blank %}
+                    <p class="bundle-page__picker-note">{{ picker_item_note | escape }}</p>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          {% comment %}
+            ---- CTA — "Receive my gift" ----
+            Lives INSIDE the per-bundle root (not shared after the loop):
+            BundleConfigurator scopes every DOM query to the root element
+            passed to its constructor (this bundle's div), so the counter
+            and validation-error styling here must be descendants of it to
+            update correctly — matching how bundle-page.liquid keeps its own
+            dual-CTA inside the single bundle root it operates on.
+          {% endcomment %}
+          <div class="gift-recipient__cta">
+            <button type="button" class="gift-recipient__receive button button--primary" data-receive-gift disabled>
+              {{ 'gift_recipient.receive_gift' | t }}
+            </button>
+            <span class="gift-recipient__cta-counter" data-counter-caption>
+              <span data-counter-current>0</span>
+              {{ 'bundles.of' | t }}
+              {{ item_count }}
+              {{ 'bundles.chosen' | t }}
+            </span>
+            <p class="gift-recipient__cta-helper">{{ 'gift_recipient.no_rush_helper' | t }}</p>
+            <p class="gift-recipient__cta-error" data-redeem-error role="alert" hidden></p>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</gift-recipient>
+
+{% stylesheet %}
+  /* ---- Gift chrome tokens (banner/note/title/CTA) — mirrors gift-checkout.liquid ---- */
+  .gift-recipient {
+    --gift-bg: #ffffff;
+    --gift-text-primary: #1f1f1e;
+    --gift-text-secondary: #6f6e69;
+    --gift-text-tertiary: #9c9b92;
+    --gift-border-divider: rgba(0, 0, 0, 0.25);
+    --gift-required: #b85450;
+
+    /* Reused configurator tokens — mirrors bundle-page.liquid */
+    --bundle-bg: rgb(255 255 255 / 1.0);
+    --bundle-bg-outer: oklch(94.9% 0.009 92);
+    --bundle-bg-accent: oklch(96.7% 0.004 94);
+    --bundle-text-primary: oklch(18.6% 0.006 95);
+    --bundle-text-secondary: oklch(41.5% 0.005 95);
+    --bundle-text-tertiary: oklch(60.1% 0.004 95);
+    --bundle-border-tertiary: oklch(78% 0.002 95);
+    --bundle-border-secondary: oklch(69% 0.005 95);
+    --bundle-required: oklch(56.5% 0.16 29);
+    --bundle-radius: 0.8rem;
+    --bundle-swatch-size: 2.75rem;
+    --bundle-swatch-size-mobile: 2.5rem;
+    --bundle-space-xs: 0.5rem;
+    --bundle-space-sm: 0.75rem;
+    --bundle-space-md: 1rem;
+    --bundle-space-lg: 1.5rem;
+    --bundle-ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+    --bundle-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    display: block;
+    background-color: #ffffff;
+    /* Matches .gift-review's flat top offset exactly, same as bundle_slug=... on
+       /pages/gift-review — the header-height calc() this replaced could report
+       a much larger value than the actual header on some viewports. */
+    padding-block-start: 140px;
+    padding-block-end: 3rem;
+    padding-inline: 1rem;
+  }
+
+  .gift-recipient__state[hidden] {
+    display: none;
+  }
+
+  /* ---- Preparing/error/redeemed status card ---- */
+  .gift-recipient__status-card {
+    max-width: 34rem;
+    margin-inline: auto;
+    background: var(--gift-bg);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+
+  .gift-recipient__status-heading {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--gift-text-primary);
+    margin: 0 0 0.75rem;
+  }
+
+  .gift-recipient__status-body {
+    font-size: 14px;
+    color: var(--gift-text-secondary);
+    margin: 0;
+  }
+
+  /* ---- Card — banner + note, sits inside .gift-recipient__inner (one continuous
+     box with the bundle title/configurator below it, not a separate box) ---- */
+  .gift-recipient__card {
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: 1.75rem 0.25rem 5rem;
+  }
+
+  .gift-recipient__banner {
+    font-size: 27px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--gift-text-primary);
+    margin: 0;
+  }
+
+  /* ---- Note — beige rounded box (matches ?mock=ready / design screenshot) ---- */
+  .gift-recipient__note {
+    margin-top: 1.75rem;
+    background: #f3efe9;
+    border-radius: 16px;
+    padding: 1.75rem 2rem;
+  }
+
+  .gift-recipient__note[hidden] {
+    display: none;
+  }
+
+  /* ---- No personal note → collapse the note's reserved bottom space so the
+     bundle title sits close under the subtitle, instead of leaving the large
+     empty gap the 5rem card padding otherwise reserves for the note card. ---- */
+  .gift-recipient__card:has(.gift-recipient__note[hidden]) {
+    padding-bottom: 2rem;
+  }
+
+  .gift-recipient__note-body {
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    font-style: italic;
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--gift-text-primary);
+    text-align: left;
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  /* ---- Bundle title block — name + price line (no side price hidden; shown per spec) ---- */
+  .gift-recipient__inner {
+    max-width: 62.5rem;
+    margin-inline: auto;
+    background: var(--bundle-bg);
+    border-radius: 1rem;
+    padding: clamp(1rem, 2.2vw, 1.75rem);
+  }
+
+  .gift-recipient__bundle[hidden] {
+    display: none;
+  }
+
+  .gift-recipient__title-block {
+    text-align: center;
+    padding-top: 1rem;
+    margin-bottom: var(--bundle-space-md);
+  }
+
+  .gift-recipient__title {
+    font-size: 1.875rem;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    color: var(--bundle-text-primary);
+    margin: 0;
+  }
+
+  .gift-recipient__price-line {
+    text-align: center;
+    font-style: normal;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.0625rem;
+    color: var(--bundle-text-tertiary);
+    margin: 0 auto var(--bundle-space-md);
+    line-height: 1.6;
+    max-width: 30rem;
+    font-weight: 400;
+  }
+
+  .gift-recipient__price-line em {
+    font-style: italic;
+    color: var(--bundle-text-tertiary);
+  }
+
+  /* ---- Hero — identical spec to bundle-page.liquid ---- */
+  .gift-recipient__hero {
+    background: var(--bundle-bg);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: var(--bundle-radius);
+    aspect-ratio: 16 / 9;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-top: 1.75rem;
+    margin-bottom: 6rem;
+    width: 100%;
+  }
+
+  .gift-recipient__hero-image,
+  .gift-recipient__hero-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .gift-recipient__hero-image {
+    padding: clamp(0.875rem, 2.4vw, 1.4rem);
+  }
+
+  /* ---- Description — sits inside .gift-recipient__card, between the banner
+     and the note (Group 1). One hidden paragraph per bundle; JS reveals the
+     one matching the resolved bundle_slug. ---- */
+  .gift-recipient__description {
+    text-align: center;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.0625rem;
+    color: var(--bundle-text-tertiary);
+    margin: 1.75rem auto 0;
+    line-height: 1.6;
+    max-width: 30rem;
+  }
+
+  .gift-recipient__description[hidden] {
+    display: none;
+  }
+
+  /* ---- Build header ---- */
+  .gift-recipient__build-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--bundle-space-xs);
+  }
+
+  .gift-recipient__build-label {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--bundle-text-secondary);
+  }
+
+  .gift-recipient__counter {
+    font-size: 0.875rem;
+    color: var(--bundle-text-primary);
+    transition: color 140ms var(--bundle-ease-out);
+  }
+
+  .gift-recipient__counter--error {
+    color: var(--bundle-required);
+  }
+
+  /* ---- Pickers/swatches — reuse bundle-page__* classes so BundleConfigurator's
+     JS (selection state, outline-fill) applies unmodified. bundle-page.liquid's
+     OWN {% stylesheet %} only loads when that section renders, which never
+     happens on this page — so these rules are copied in full from
+     bundle-page.liquid rather than assumed to be inherited. Keep in sync with
+     that file's "Pickers"/"Swatches" blocks if they change. ---- */
+  .gift-recipient__pickers {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    margin-bottom: var(--bundle-space-lg);
+  }
+
+  .bundle-page__picker {
+    padding-top: 0;
+  }
+
+  .bundle-page__picker-header {
+    margin-bottom: 0.5rem;
+  }
+
+  .bundle-page__picker-title {
+    font-size: 1.1875rem;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    font-weight: 700;
+    color: var(--bundle-text-primary);
+    margin: 0;
+  }
+
+  .bundle-page__picker-helper {
+    font-size: 0.9375rem;
+    color: var(--bundle-text-secondary);
+    margin: 0.3rem 0 0;
+  }
+
+  .bundle-page__no-colors {
+    font-size: 13px;
+    color: var(--bundle-text-tertiary);
+    font-style: italic;
+  }
+
+  .bundle-page__picker-note {
+    font-style: italic;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.85rem;
+    color: var(--bundle-text-tertiary);
+    margin: 0.35rem 0 0;
+    line-height: 1.4;
+  }
+
+  .bundle-page__swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+  }
+
+  .bundle-page__swatch {
+    width: var(--bundle-swatch-size);
+    height: var(--bundle-swatch-size);
+    border-radius: 0.25rem;
+    border: 0.5px solid color-mix(in oklab, var(--bundle-text-primary) 12%, var(--bundle-bg) 88%);
+    padding: 2px;
+    background: var(--bundle-bg);
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+    transition:
+      box-shadow 140ms var(--bundle-ease-out),
+      transform 140ms var(--bundle-ease-out),
+      border-color 140ms var(--bundle-ease-out);
+  }
+
+  .bundle-page__swatch:hover:not(:disabled) {
+    border-color: var(--bundle-border-secondary);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--bundle-text-primary) 24%, var(--bundle-bg) 76%);
+    transform: translateY(-1px);
+  }
+
+  .bundle-page__swatch--selected {
+    box-shadow: 0 0 0 1px var(--bundle-text-primary);
+    border-color: var(--bundle-text-primary);
+  }
+
+  .bundle-page__swatch--selected:hover:not(:disabled) {
+    border-color: var(--bundle-text-primary);
+    box-shadow: 0 0 0 1px var(--bundle-text-primary);
+    transform: none;
+  }
+
+  .bundle-page__swatch--unavailable {
+    cursor: not-allowed;
+  }
+
+  .bundle-page__swatch--unavailable .bundle-page__swatch-image,
+  .bundle-page__swatch--unavailable .bundle-page__swatch-color {
+    opacity: 0.38;
+  }
+
+  .bundle-page__swatch-unavailable-icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .bundle-page__swatch-unavailable-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .bundle-page__swatch-unavailable-icon path {
+    fill: none;
+    stroke: color-mix(in oklab, var(--bundle-text-primary) 50%, transparent);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .bundle-page__swatch-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0.14rem;
+  }
+
+  .bundle-page__swatch-color {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 0.14rem;
+  }
+
+  .bundle-page__swatch-le-gap {
+    width: 1px;
+    height: var(--bundle-swatch-size);
+    background: rgba(0, 0, 0, 0.16);
+    margin-inline: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .bundle-page__swatch-badge {
+    position: absolute;
+    bottom: -0.45rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.375rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: var(--bundle-text-primary);
+    color: var(--bundle-bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: 999px;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  @media screen and (max-width: 749px) {
+    .bundle-page__swatch {
+      width: var(--bundle-swatch-size-mobile);
+      height: var(--bundle-swatch-size-mobile);
+    }
+  }
+
+  /* ---- CTA ---- */
+  .gift-recipient__cta {
+    margin-top: var(--bundle-space-lg);
+    padding-top: var(--bundle-space-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .gift-recipient__receive {
+    width: 100%;
+    max-width: 340px;
+    margin-inline: auto;
+    min-height: 3rem;
+    padding-block: 14px;
+    font-size: 1.25rem;
+    font-weight: 600;
+    border-radius: 0.7rem;
+    background: var(--bundle-text-primary);
+    border: 1px solid var(--bundle-text-primary);
+    color: var(--bundle-bg);
+  }
+
+  .gift-recipient__receive:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .gift-recipient__cta-counter {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--bundle-text-primary);
+    text-align: center;
+    transition: color 140ms var(--bundle-ease-out);
+  }
+
+  .gift-recipient__cta-counter--error {
+    color: var(--bundle-required);
+  }
+
+  .gift-recipient__cta-helper {
+    font-size: 11px;
+    font-style: italic;
+    color: var(--bundle-text-tertiary);
+    text-align: center;
+    margin: 0;
+  }
+
+  .gift-recipient__cta-error {
+    font-size: 12px;
+    color: #b3261e;
+    text-align: center;
+    margin: 0;
+  }
+
+  .gift-recipient__cta-error[hidden] {
+    display: none;
+  }
+
+  /* ---- Desktop ---- */
+  @media screen and (min-width: 681px) {
+    .gift-recipient__inner,
+    .gift-recipient__card {
+      padding-top: 0;
+    }
+  }
+
+  /* ---- Mobile ---- */
+  @media screen and (max-width: 680px) {
+    .gift-recipient {
+      /* Fixed cap, not the header-height calc used above — on some mobile
+         viewports the dynamically-measured --header-group-height/--header-height
+         run much taller than the actual visible header, leaving a large empty
+         gap above the banner. A flat value guarantees the banner sits right
+         under the header regardless of what those variables report here. */
+      padding-block-start: 0;
+    }
+
+    .gift-recipient__banner {
+      font-size: 24px;
+    }
+
+    .gift-recipient__card {
+      padding: 1.25rem 0 3.5rem;
+    }
+
+    .gift-recipient__hero {
+      margin-bottom: 4.5rem;
+    }
+  }
+{% endstylesheet %}
+
+{% comment %}
+  ============================================================================
+  WEB COMPONENT REGISTRATION — mirrors <gift-checkout>/<gift-review>/<bundle-page>.
+  ============================================================================
+{% endcomment %}
+{% javascript %}
+  class GiftRecipient extends HTMLElement {
+    connectedCallback() {
+      if (this.controller) return;
+      import(this.dataset.giftSrc)
+        .then((module) => {
+          this.controller = new module.GiftRecipientController(this);
+        })
+        .catch((err) => {
+          console.error('Failed to load gift recipient controller:', err);
+        });
+    }
+  }
+
+  if (!customElements.get('gift-recipient')) {
+    customElements.define('gift-recipient', GiftRecipient);
+  }
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "Gift recipient",
+  "tag": "section",
+  "class": "gift-recipient-section",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "The gift redemption page. Resolves ?token= against the custom gift-flow app's endpoint (set below), reveals the matching bundle's configurator, and redeems via Storefront cartCreate + cartGiftCardCodesUpdate. See docs/decisions/gift-review-checkout-mechanism.md and docs/decisions/milestone-8-recipient-page.md."
+    },
+    {
+      "type": "text",
+      "id": "gift_api_base_url",
+      "label": "Gift app API base URL",
+      "default": "https://oyster-app-3c672.ondigitalocean.app",
+      "info": "Gift lookup API. Leave default for production. Use ?mock=ready to preview layout without a real token."
+    },
+    {
+      "type": "text",
+      "id": "storefront_access_token",
+      "label": "Storefront API access token",
+      "info": "Optional. Leave blank to use Shopify's injected storefront token. Used for gift-card validation and redemption."
+    },
+    {
+      "type": "select",
+      "id": "swatch_style",
+      "label": "Swatch style",
+      "options": [
+        { "value": "color", "label": "Color" },
+        { "value": "image", "label": "Image" }
+      ],
+      "default": "image"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Gift recipient"
+    }
+  ]
+}
+{% endschema %}

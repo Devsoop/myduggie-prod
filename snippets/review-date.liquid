@@ -1,0 +1,40 @@
+{%- doc -%}
+  Relative date (<30 days) or absolute after.
+  @param {string} submitted_at - ISO 8601 datetime
+{%- enddoc -%}
+
+{%- liquid
+  assign submitted_at = submitted_at | default: '' | strip
+  if submitted_at == blank
+    assign display_date = ''
+  else
+    assign submitted_ts = submitted_at | date: '%s' | plus: 0
+    assign now_ts = 'now' | date: '%s' | plus: 0
+    assign diff_seconds = now_ts | minus: submitted_ts
+    assign diff_days = diff_seconds | divided_by: 86400
+
+    if diff_days < 1
+      assign display_date = 'Today'
+    elsif diff_days == 1
+      assign display_date = '1 day ago'
+    elsif diff_days < 7
+      assign display_date = diff_days | append: ' days ago'
+    elsif diff_days < 14
+      assign week_count = diff_days | divided_by: 7
+      if week_count == 1
+        assign display_date = '1 week ago'
+      else
+        assign display_date = week_count | append: ' weeks ago'
+      endif
+    elsif diff_days < 30
+      assign week_count = diff_days | divided_by: 7
+      assign display_date = week_count | append: ' weeks ago'
+    else
+      assign display_date = submitted_at | date: '%B %d, %Y'
+    endif
+  endif
+-%}
+
+{%- if display_date != blank -%}
+  <time class="reviews-card__date" datetime="{{ submitted_at }}">{{ display_date }}</time>
+{%- endif -%}

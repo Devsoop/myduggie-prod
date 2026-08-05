@@ -1,0 +1,20 @@
+{%- doc -%}
+  Split metaobject reviewer_name into first + last for card display.
+  @param {string} reviewer_name
+  @returns {string} first|last via echo (pipe-delimited)
+{%- enddoc -%}
+
+{%- liquid
+  assign reviewer_name = reviewer_name | strip
+  assign reviewer_first = ''
+  assign reviewer_last = ''
+
+  if reviewer_name != blank
+    assign name_parts = reviewer_name | split: ' '
+    assign reviewer_first = name_parts | first
+    if name_parts.size > 1
+      assign reviewer_last = name_parts | last
+    endif
+  endif
+-%}
+{{- reviewer_first -}}|{{- reviewer_last -}}

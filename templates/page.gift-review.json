@@ -1,0 +1,9 @@
+{
+  "sections": {
+    "main": {
+      "type": "gift-review",
+      "settings": {}
+    }
+  },
+  "order": ["main"]
+}

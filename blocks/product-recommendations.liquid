@@ -1,0 +1,883 @@
+
+
+{%- doc -%}
+  Renders product recommendations.
+  {section.id} - identifies the parent section for the Section Rendering API
+
+  https://shopify.dev/docs/api/section-rendering-api
+{%- enddoc -%}
+
+<script
+  src="{{ 'product-recommendations.js' | asset_url }}"
+  type="module"
+></script>
+
+{% style %}
+  .product-recommendations--standard-pdp {
+    --pdp-border-card: rgba(0, 0, 0, 0.5);
+  }
+
+  .product-recommendations--standard-pdp .resource-list__item {
+    border: 2px solid var(--pdp-border-card);
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 242px;
+    width: 100%;
+  }
+{% endstyle %}
+
+{% liquid
+  assign block_settings = block.settings
+  assign standard_pdp_recommendations = false
+  if template.suffix == 'standard-pdp'
+    assign standard_pdp_recommendations = true
+  endif
+  if block_settings.standard_pdp_style
+    assign standard_pdp_recommendations = true
+  endif
+  if section.settings.standard_pdp_section_style
+    assign standard_pdp_recommendations = true
+  endif
+
+  assign standard_pdp_slide_width_max = '300px'
+  if standard_pdp_recommendations
+    assign standard_pdp_slide_width_max = '242px'
+  endif
+
+  assign grid_visibility_class = 'hidden--mobile'
+  assign carousel_visibility_class = 'hidden--desktop'
+  if standard_pdp_recommendations
+    assign grid_visibility_class = 'hidden--below-desktop'
+    assign carousel_visibility_class = 'hidden--from-desktop'
+  endif
+
+  case block_settings.layout_type
+    when 'grid'
+      assign classes = 'resource-list--grid'
+    when 'carousel'
+      assign classes = 'resource-list--carousel'
+  endcase
+%}
+
+{% comment %}
+  [data-section-id] {section.id} - used to fetch the product recommendations from the Section Rendering API
+{% endcomment %}
+
+{% render 'quick-add-styles' %}
+{% render 'quick-add-modal-styles' %}
+{% render 'product-badges-styles' %}
+<product-recommendations
+  id="product-recommendations-{{ block.id }}"
+  class="product-recommendations{% if standard_pdp_recommendations %} product-recommendations--standard-pdp{% endif %}"
+  data-url="{{ routes.product_recommendations_url }}?limit={{ block_settings.max_products }}"
+  data-section-id="{{ section.id }}"
+  data-product-id="{{ closest.product.id }}"
+  data-intent="{{ block_settings.recommendation_type }}"
+  data-recommendations-performed="{{ recommendations.performed }}"
+  data-hydration-key="product-recommendations-{{ block.id }}"
+  {% if request.visual_preview_mode %}
+    data-shopify-editor-preview
+  {% endif %}
+  data-testid="product-recommendations-block"
+  {{ block.shopify_attributes }}
+>
+  <div
+    class="
+      {% if block_settings.inherit_color_scheme == false %}color-{{ block_settings.color_scheme }}{% endif %}
+      block-resource-list
+      spacing-style
+      gap-style
+    "
+    style="
+      {%  render 'spacing-style', settings: block_settings %}
+      {%  render 'gap-style', value: block_settings.gap %}
+      --resource-list-column-gap-desktop: {{ block_settings.columns_gap }}px;
+      --resource-list-row-gap-desktop: {{ block_settings.rows_gap }}px;
+      --resource-list-columns-mobile: repeat(auto-fill, minmax(9.25rem, 1fr));
+      --border-radius: {{ block_settings.border_radius }}px;
+    "
+  >
+    <div class="section-resource-list__content">
+      {% content_for 'blocks' %}
+    </div>
+
+    {%- if recommendations.performed or closest.product == blank -%}
+      {% liquid
+        assign products = recommendations.products
+
+        if closest.product == blank
+          # Onboarding mode: Show placeholder products
+          for i in (1..block_settings.max_products)
+            assign products = products | append: ', '
+            assign products = products | split: ','
+          endfor
+        elsif recommendations.performed and recommendations.products_count == 0
+          # No recommendations found, pull from catalog
+          if block_settings.recommendation_type == 'related'
+            assign products = collections.all.products | reject: 'id', closest.product.id
+          elsif block_settings.recommendation_type == 'complementary'
+            # Do not recommend the All collection as complementary products
+            assign products = null
+          endif
+        else
+          assign products = recommendations.products
+        endif
+      %}
+      {% capture list_items %}
+        {% for product in products limit: block_settings.max_products %}
+          <div class="resource-list__item">
+            {% content_for 'block',
+              type: '_product-card',
+              id: 'static-product-card',
+              closest.product: product
+            %}
+          </div>
+          {% if block_settings.layout_type == 'carousel' or block_settings.carousel_on_mobile %}
+            {% unless forloop.last %}
+              <!--@list/split-->
+            {% endunless %}
+          {% endif %}
+        {% endfor %}
+      {% endcapture %}
+
+      {% liquid
+        # Create an array from the list items to be used in the carousel
+        assign slide_content = list_items | strip
+        assign slides = slide_content | split: '<!--@list/split-->'
+
+        if products != blank and products.size > 0
+          assign has_recommendations = 'true'
+        else
+          assign has_recommendations = 'false'
+        endif
+      %}
+
+      <div
+        class="
+          resource-list
+          {% if block_settings.carousel_on_mobile and block_settings.layout_type != 'carousel' %}
+            {{ grid_visibility_class }}
+          {% endif %}
+          {{ classes }}
+        "
+        {% if block_settings.layout_type == 'grid' %}
+          data-testid="resource-list-grid"
+        {% endif %}
+        data-has-recommendations="{{ has_recommendations }}"
+      >
+        {% case block_settings.layout_type %}
+          {% when 'grid' %}
+            {{ list_items }}
+          {% when 'carousel' %}
+            {% render 'resource-list-carousel',
+              ref: 'resourceListCarousel',
+              slides: slides,
+              slide_count: recommendations.products.size,
+              settings: block_settings,
+              slide_width_max: standard_pdp_slide_width_max
+            %}
+        {% endcase %}
+      </div>
+
+      {% if block_settings.carousel_on_mobile and block_settings.layout_type != 'carousel' %}
+        {% liquid
+          assign mobile_carousel_gap = block_settings.columns_gap
+        %}
+        <div
+          class="
+            resource-list
+            {{ carousel_visibility_class }}
+            force-full-width
+          "
+          style="
+            --resource-list-gap: {{ mobile_carousel_gap }}px;
+            {% if standard_pdp_recommendations %}
+              --resource-list-column-gap-desktop: {{ mobile_carousel_gap }}px;
+              --column-count: 1;
+              --mobile-card-size: 60cqw;
+            {% endif %}
+          "
+        >
+          {% render 'resource-list-carousel',
+            ref: 'resourceListCarouselMobile',
+            slides: slides,
+            slide_count: recommendations.products.size,
+            settings: block_settings,
+            slide_width_max: standard_pdp_slide_width_max
+          %}
+        </div>
+      {% endif %}
+    {%- else -%}
+      <div class="resource-list resource-list--grid">
+        {% for i in (1..block_settings.max_products) %}
+          <div
+            class="resource-list__item product-recommendations__skeleton-item"
+            aria-label="{{ 'accessibility.loading_product_recommendations' | t }}"
+          ></div>
+        {% endfor %}
+      </div>
+    {%- endif -%}
+  </div>
+</product-recommendations>
+
+{% stylesheet %}
+  .block-resource-list {
+    display: flex;
+    flex-direction: column;
+    row-gap: var(--gap);
+    min-width: 0;
+    min-height: 0;
+    container-type: inline-size;
+    container-name: resource-list;
+    border-radius: var(--border-radius, 0);
+  }
+
+  .product-recommendations-wrapper {
+    width: 100%;
+  }
+
+  .section-content-wrapper:has(> .product-recommendations-wrapper .product-recommendations--standard-pdp) {
+    --pdp-specs-cap: min(1280px, calc(100vw - (2 * var(--page-margin, 24px))));
+    align-items: stretch;
+    width: 100%;
+    max-width: var(--pdp-specs-cap);
+    margin-inline: auto;
+  }
+
+  .product-recommendations-wrapper:has(product-recommendations[data-shopify-editor-preview]) {
+    width: 100vw;
+  }
+
+  .product-recommendations--standard-pdp .resource-list__item {
+    background: var(--color-background);
+    -webkit-tap-highlight-color: transparent;
+    max-width: 242px;
+    width: 100%;
+  }
+
+  .product-recommendations--standard-pdp .resource-list--grid {
+    grid-template-columns: repeat(auto-fill, minmax(0, 242px));
+    justify-content: start;
+  }
+
+  @container resource-list (max-width: 749px) {
+    .product-recommendations--standard-pdp .resource-list--grid {
+      grid-template-columns: repeat(auto-fill, minmax(0, 242px));
+    }
+  }
+
+  @container resource-list (min-width: 750px) {
+    .product-recommendations--standard-pdp .resource-list--grid {
+      grid-template-columns: repeat(auto-fill, minmax(0, 242px));
+    }
+  }
+
+  .product-recommendations--standard-pdp .resource-list__slide {
+    max-width: 242px;
+  }
+
+  .product-recommendations--standard-pdp .product-card__content {
+    align-items: center;
+    justify-content: flex-start;
+    text-align: center;
+    min-height: 100%;
+    padding: 12px 12px 14px;
+  }
+
+  .product-recommendations--standard-pdp .card-gallery {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding-block: 0 4px;
+  }
+
+  .product-recommendations--standard-pdp .card-gallery quick-add-component,
+  .product-recommendations--standard-pdp .card-gallery slideshow-arrows,
+  .product-recommendations--standard-pdp .card-gallery slideshow-controls {
+    display: none;
+  }
+
+  .product-recommendations--standard-pdp .card-gallery slideshow-component {
+    width: min(72%, 11rem);
+    margin-inline: auto;
+  }
+
+  .product-recommendations--standard-pdp .card-gallery slideshow-container {
+    background: transparent;
+  }
+
+  .product-recommendations--standard-pdp .card-gallery .product-media-container,
+  .product-recommendations--standard-pdp .card-gallery .product-media {
+    aspect-ratio: 1 / 1;
+  }
+
+  .product-recommendations--standard-pdp .card-gallery .product-media__image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .product-recommendations--standard-pdp :is(product-title, product-price, product-swatches) {
+    width: 100%;
+  }
+
+  .product-recommendations--standard-pdp :is(product-title, product-price, product-title .text-block, product-price .text-block) {
+    text-align: center;
+  }
+
+  .product-recommendations--standard-pdp product-price {
+    display: flex;
+    justify-content: center;
+  }
+
+  .product-recommendations--standard-pdp product-price [ref='priceContainer'] {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .product-recommendations--standard-pdp product-price :is(.price__regular, .price__sale, .price-item__group, .price-item) {
+    text-align: center;
+    margin-inline: auto;
+  }
+
+  .product-recommendations--standard-pdp product-swatches {
+    justify-content: center;
+    max-width: 9.5rem;
+    margin-inline: auto;
+    --overflow-list-padding-block: 0px;
+    --overflow-list-padding-inline: 0px;
+    --variant-picker-swatch-width: 1.875rem;
+    --variant-picker-swatch-height: 1.875rem;
+    --variant-picker-swatch-radius: 0.2rem;
+    --overflow-list-more-height: auto;
+  }
+
+  .product-recommendations--standard-pdp swatches-variant-picker-component {
+    justify-content: center;
+  }
+
+  .product-recommendations--standard-pdp swatches-variant-picker-component overflow-list::part(list) {
+    gap: 0.25rem;
+    justify-content: center;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    box-sizing: border-box;
+    width: var(--variant-picker-swatch-width);
+    height: var(--variant-picker-swatch-height);
+    border: 1.5px solid rgb(var(--color-foreground-rgb) / 0.15);
+    border-radius: 0.2rem;
+    background: transparent;
+    overflow: hidden;
+    outline: none;
+    outline-offset: 0;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch:hover,
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch:has(:checked) {
+    background: transparent;
+    color: var(--color-foreground);
+    border-color: var(--color-foreground);
+    outline: none;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch input {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch::after {
+    content: none;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch .swatch {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    outline: none;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label--has-swatch .swatch::after {
+    content: none;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label svg {
+    display: none;
+  }
+
+  .product-recommendations--standard-pdp .variant-option__button-label:has(svg)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      to top left,
+      transparent calc(50% - 0.5px),
+      rgb(var(--color-foreground-rgb) / 0.4) calc(50% - 0.5px),
+      rgb(var(--color-foreground-rgb) / 0.4) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    );
+    pointer-events: none;
+  }
+
+  .product-recommendations--standard-pdp .hidden-swatches__count {
+    min-width: 1.5rem;
+    height: 1.875rem;
+    font-size: 0.75rem;
+    color: rgb(var(--color-foreground-rgb) / 0.6);
+    font-weight: 500;
+  }
+
+  @media screen and (min-width: 750px) {
+    .product-recommendations--standard-pdp product-swatches {
+      max-width: 11rem;
+    }
+  }
+
+  @media screen and (max-width: 1360px) {
+    .product-recommendations-wrapper {
+      margin-block-start: -24px;
+    }
+
+    .product-recommendations--standard-pdp .block-resource-list {
+      padding-block-start: 8px !important;
+    }
+  }
+
+  @media screen and (max-width: 1360px) {
+    .product-recommendations--standard-pdp slideshow-arrows {
+      mix-blend-mode: normal;
+      align-items: center;
+    }
+
+    .product-recommendations--standard-pdp slideshow-arrows .slideshow-control {
+      opacity: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      min-height: unset;
+      min-width: unset;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      background: #FFFFFF;
+      color: #1F1F1E;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+    }
+
+    .product-recommendations--standard-pdp slideshow-arrows .slideshow-control:hover {
+      background: #1F1F1E;
+      color: #FFFFFF;
+    }
+
+    .product-recommendations--standard-pdp slideshow-arrows .slideshow-control .svg-wrapper,
+    .product-recommendations--standard-pdp slideshow-arrows .slideshow-control svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  /*
+   * CSS fallback for Horizon overflow-list race condition.
+   * When overflow-list JS fails to initialize (#waitForStyles promise stalls),
+   * hide excess swatches to prevent all 9 showing. The :not([style]) selector
+   * matches only when #reflowItems never set --overflow-count on the host.
+   * Once JS initializes properly, inline styles are added and this rule stops matching.
+   */
+  @media screen and (min-width: 1361px) {
+    .product-recommendations--standard-pdp overflow-list:not([style]) > li.variant-option__swatch ~ li.variant-option__swatch ~ li.variant-option__swatch ~ li.variant-option__swatch ~ li.variant-option__swatch {
+      display: none;
+    }
+  }
+
+  @media screen and (max-width: 1360px) {
+    .product-recommendations--standard-pdp overflow-list:not([style]) > li.variant-option__swatch ~ li.variant-option__swatch ~ li.variant-option__swatch ~ li.variant-option__swatch {
+      display: none;
+    }
+  }
+
+  @media screen and (max-width: 1360px) {
+    .product-recommendations--standard-pdp .resource-list__carousel .resource-list__slide {
+      --slide-width: clamp(150px, var(--mobile-card-size, 60cqw), var(--slide-width-max, 242px));
+    }
+  }
+
+  /* Card outline is drawn by .resource-list__item; avoid a doubled inner border */
+  .product-recommendations--standard-pdp .product-card__content {
+    border: none;
+    border-radius: 8px;
+  }
+
+{% endstylesheet %}
+
+{% javascript %}
+  /*
+   * Workaround for Horizon overflow-list #waitForStyles() race condition.
+   * If the stylesheet's load event fires between the styles.sheet null-check
+   * and the addEventListener call, the promise never resolves and #initialize()
+   * never runs. This detects stalled overflow-lists and re-triggers connectedCallback(),
+   * which is safe because:
+   *   - DeclarativeShadowElement.connectedCallback() guards with if (!this.shadowRoot)
+   *   - #waitForStyles() resolves immediately when styles.sheet is truthy (cached)
+   *   - #initialize() sets up IntersectionObserver → fires immediately → #reflowItems()
+   */
+  function fixStalledOverflowLists() {
+    document.querySelectorAll('.product-recommendations--standard-pdp overflow-list').forEach(function(ol) {
+      if (!ol.isConnected || !ol.shadowRoot) return;
+      if (ol.style.getPropertyValue('--overflow-count')) return;
+
+      var link = ol.shadowRoot.querySelector('link[rel="stylesheet"]');
+      if (link && link.sheet) {
+        ol.connectedCallback();
+      }
+    });
+  }
+
+  setTimeout(fixStalledOverflowLists, 3000);
+  setTimeout(fixStalledOverflowLists, 6000);
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "t:names.product_recommendations",
+  "class": "product-recommendations-wrapper",
+  "blocks": [
+    {
+      "type": "@theme"
+    },
+    {
+      "type": "@app"
+    }
+  ],
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "t:content.resource_reference_product_recommendations"
+    },
+    {
+      "type": "select",
+      "id": "recommendation_type",
+      "label": "t:settings.type",
+      "options": [
+        {
+          "value": "related",
+          "label": "t:options.related"
+        },
+        {
+          "value": "complementary",
+          "label": "t:options.complementary"
+        }
+      ],
+      "default": "related"
+    },
+    {
+      "type": "paragraph",
+      "content": "t:content.complementary_products"
+    },
+    {
+      "type": "checkbox",
+      "id": "standard_pdp_style",
+      "label": "Use standard PDP card style",
+      "default": false,
+      "visible_if": "{{ false }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.cards_layout"
+    },
+    {
+      "type": "select",
+      "id": "layout_type",
+      "label": "t:settings.layout_style",
+      "options": [
+        {
+          "value": "grid",
+          "label": "t:options.grid"
+        },
+        {
+          "value": "carousel",
+          "label": "t:options.carousel"
+        }
+      ],
+      "default": "grid"
+    },
+    {
+      "type": "checkbox",
+      "id": "carousel_on_mobile",
+      "label": "t:settings.carousel_on_mobile",
+      "default": true,
+      "visible_if": "{{ block.settings.layout_type == 'grid' }}"
+    },
+    {
+      "type": "range",
+      "id": "max_products",
+      "label": "t:settings.product_count",
+      "min": 2,
+      "max": 10,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "columns_gap",
+      "label": "t:settings.horizontal_gap",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 16,
+      "visible_if": "{{ block.settings.layout_type == 'grid' or block.settings.layout_type == 'carousel' }}"
+    },
+    {
+      "type": "range",
+      "id": "rows_gap",
+      "label": "t:settings.vertical_gap",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 16,
+      "visible_if": "{{ block.settings.layout_type == 'grid' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.carousel_navigation",
+      "visible_if": "{{ block.settings.layout_type == 'carousel' or block.settings.carousel_on_mobile == true }}"
+    },
+    {
+      "type": "select",
+      "id": "icons_style",
+      "label": "t:settings.icon",
+      "options": [
+        {
+          "value": "arrow",
+          "label": "t:options.arrows"
+        },
+        {
+          "value": "chevron",
+          "label": "t:options.chevrons"
+        },
+        {
+          "value": "arrows_large",
+          "label": "t:options.arrows_large"
+        },
+        {
+          "value": "chevron_large",
+          "label": "t:options.chevron_large"
+        },
+        {
+          "value": "none",
+          "label": "t:options.none"
+        }
+      ],
+      "default": "arrow",
+      "visible_if": "{{ block.settings.layout_type == 'carousel' or block.settings.carousel_on_mobile == true }}"
+    },
+    {
+      "type": "select",
+      "id": "icons_shape",
+      "label": "t:settings.icon_background",
+      "options": [
+        {
+          "value": "none",
+          "label": "t:options.none"
+        },
+        {
+          "value": "circle",
+          "label": "t:options.circle"
+        },
+        {
+          "value": "square",
+          "label": "t:options.square"
+        }
+      ],
+      "default": "none",
+      "visible_if": "{{ block.settings.icons_style != 'none' and block.settings.layout_type == 'carousel' or block.settings.carousel_on_mobile == true }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.layout"
+    },
+    {
+      "type": "range",
+      "id": "gap",
+      "label": "t:settings.gap",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "border_radius",
+      "label": "t:settings.border_radius",
+      "min": 0,
+      "max": 32,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "checkbox",
+      "id": "inherit_color_scheme",
+      "label": "t:settings.inherit_color_scheme",
+      "default": true
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1",
+      "visible_if": "{{ block.settings.inherit_color_scheme == false }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-inline-start",
+      "label": "t:settings.left",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-inline-end",
+      "label": "t:settings.right",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:names.product_recommendations",
+      "category": "t:categories.product",
+      "settings": {
+        "recommendation_type": "related",
+        "border_radius": 0,
+        "padding-inline-start": 0,
+        "padding-inline-end": 0
+      },
+      "blocks": {
+        "heading": {
+          "type": "text",
+          "settings": {
+            "text": "t:html_defaults.may_also_like"
+          }
+        },
+        "static-product-card": {
+          "type": "_product-card",
+          "static": true,
+          "settings": {
+            "product_card_gap": 4
+          },
+          "blocks": {
+            "product-card-gallery": {
+              "type": "_product-card-gallery",
+              "settings": {
+                "image_ratio": "adapt",
+                "border": "none",
+                "border_width": 1,
+                "border_opacity": 100,
+                "border_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              }
+            },
+            "product_title": {
+              "type": "product-title",
+              "name": "t:names.product_title",
+              "settings": {
+                "width": "fit-content",
+                "max_width": "normal",
+                "alignment": "left",
+                "type_preset": "paragraph",
+                "font": "var(--font-body--family)",
+                "font_size": "1rem",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "color": "var(--color-foreground)",
+                "background": false,
+                "background_color": "#00000026",
+                "corner_radius": 0,
+                "padding-block-start": 4,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              }
+            },
+            "price": {
+              "type": "price",
+              "name": "t:names.product_price",
+              "settings": {
+                "show_sale_price_first": true,
+                "show_installments": false,
+                "show_tax_info": false,
+                "type_preset": "h6",
+                "width": "100%",
+                "alignment": "left",
+                "font": "var(--font-body--family)",
+                "font_size": "1rem",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "color": "var(--color-foreground)",
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              }
+            }
+          },
+          "block_order": ["product-card-gallery", "product_title", "price"]
+        }
+      },
+      "block_order": ["heading"]
+    }
+  ]
+}
+{% endschema %}

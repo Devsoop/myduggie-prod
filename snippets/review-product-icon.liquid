@@ -1,0 +1,43 @@
+{%- doc -%}
+  Product outline icon for Owns row (§5.6).
+  Outline shape from custom.outline_image or theme asset; tinted with color_hex via CSS mask.
+  Upload filled black silhouettes for metafield SVGs (stroke-only SVGs tint poorly).
+  @param {string} icon_type - fallback inline SVG when no outline_url
+  @param {string} color_hex - variant color
+  @param {string} [outline_url]
+{%- enddoc -%}
+
+{%- liquid
+  assign icon_type = icon_type | default: 'duggie'
+  assign color_hex = color_hex | default: '#1F1F1E'
+  assign outline_url = outline_url | strip
+-%}
+
+<span
+  class="reviews-card__own-icon{% if outline_url != blank %} reviews-card__own-icon--outline{% endif %}"
+  title="{{ icon_type }}"
+>
+  {%- if outline_url != blank -%}
+    <span
+      class="reviews-card__own-icon__shape"
+      style="--reviews-own-color: {{ color_hex }}; --reviews-own-mask: url('{{ outline_url | escape }}');"
+      aria-hidden="true"
+    ></span>
+  {%- else -%}
+    {%- case icon_type -%}
+      {%- when 'keychain' -%}
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="16" cy="18" r="9" stroke="{{ color_hex }}" stroke-width="2.5" fill="none"/>
+          <path d="M16 9V5M13 5h6" stroke="{{ color_hex }}" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      {%- when 'pipe' -%}
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="4" y="14" width="24" height="4" rx="2" fill="{{ color_hex }}"/>
+        </svg>
+      {%- else -%}
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="8" y="6" width="16" height="20" rx="3" stroke="{{ color_hex }}" stroke-width="2.5" fill="none"/>
+        </svg>
+    {%- endcase -%}
+  {%- endif -%}
+</span>

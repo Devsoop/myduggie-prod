@@ -1,0 +1,30 @@
+{%- doc -%}
+  Whole stars for review cards (1–5).
+  @param {number} rating - Star count 1–5
+  @param {string} [class_modifier] - Optional BEM modifier class suffix
+{%- enddoc -%}
+
+{%- liquid
+  assign rating = rating | default: 0 | plus: 0
+  assign star_class = 'reviews-stars reviews-stars--card'
+  if class_modifier != blank
+    assign star_class = star_class | append: ' ' | append: class_modifier
+  endif
+-%}
+
+<span class="{{ star_class }}" aria-label="{{ rating }} out of 5 stars">
+  {%- for i in (1..5) -%}
+    <svg
+      class="reviews-stars__icon"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="{% if i <= rating %}#1F1F1E{% else %}none{% endif %}"
+      stroke="#1F1F1E"
+      stroke-width="1.5"
+      aria-hidden="true"
+    >
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  {%- endfor -%}
+</span>

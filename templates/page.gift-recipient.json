@@ -1,0 +1,9 @@
+{
+  "sections": {
+    "main": {
+      "type": "gift-recipient",
+      "settings": {}
+    }
+  },
+  "order": ["main"]
+}

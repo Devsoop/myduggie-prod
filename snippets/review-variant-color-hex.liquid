@@ -1,0 +1,146 @@
+{%- doc -%}
+  Hex color for one owns_colors row (Build Guide §4.1).
+
+  Reads in this order until a non-blank hex resolves:
+    1. Variant `shopify.color-pattern`     (list of color-pattern metaobjects)
+    2. Product `shopify.color-pattern`     match by variant's Color option label
+    3. Product `shopify.color-pattern`     first entry
+    4. Product Color option swatch         match by variant id
+    5. Product Color option swatch         match by variant option name
+    6. Default #1F1F1E
+
+  @param {object} owns_color_entry - variant reference from `owns_colors`
+  @param {object} [catalog_product] - hydrates the full variant + product
+  @returns {string} hex via echo
+{%- enddoc -%}
+
+{%- liquid
+  assign color_hex = '#1F1F1E'
+  assign selected_variant = owns_color_entry.value | default: owns_color_entry
+
+  assign source_product = catalog_product
+  if source_product == blank or source_product == empty
+    assign source_product = selected_variant.product
+  endif
+  if source_product.handle != blank
+    assign hydrated_product = all_products[source_product.handle]
+    if hydrated_product != empty
+      assign source_product = hydrated_product
+    endif
+  endif
+
+  if source_product != blank and selected_variant.id != blank
+    for catalog_variant in source_product.variants
+      if catalog_variant.id == selected_variant.id
+        assign selected_variant = catalog_variant
+        break
+      endif
+    endfor
+  endif
+
+  assign resolved_label = ''
+  if selected_variant.id != blank and source_product != blank
+    for product_option in source_product.options_with_values
+      assign option_name_lc = product_option.name | downcase
+      if option_name_lc == 'color' or option_name_lc == 'colour' or option_name_lc == 'colors'
+        if product_option.position == 1
+          assign resolved_label = selected_variant.option1
+        elsif product_option.position == 2
+          assign resolved_label = selected_variant.option2
+        elsif product_option.position == 3
+          assign resolved_label = selected_variant.option3
+        endif
+        break
+      endif
+    endfor
+  endif
+  assign resolved_label_lc = resolved_label | downcase | strip
+-%}
+
+{%- capture variant_patterns_match -%}
+  {%- assign variant_color_patterns = selected_variant.metafields.shopify["color-pattern"].value -%}
+  {%- if variant_color_patterns != blank and variant_color_patterns.size > 0 -%}
+    {%- assign matched = '' -%}
+    {%- if resolved_label_lc != blank -%}
+      {%- for color_pattern in variant_color_patterns -%}
+        {%- capture pl -%}{{ color_pattern.label }}{%- endcapture -%}
+        {%- assign pl_lc = pl | downcase | strip -%}
+        {%- if pl_lc == resolved_label_lc -%}
+          {{ color_pattern.color }}
+          {%- assign matched = '1' -%}
+          {%- break -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {%- if matched == '' -%}
+      {{ variant_color_patterns.first.color }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endcapture -%}
+{%- assign variant_patterns_match = variant_patterns_match | strip -%}
+
+{%- capture product_patterns_match -%}
+  {%- assign product_color_patterns = source_product.metafields.shopify["color-pattern"].value -%}
+  {%- if product_color_patterns != blank and product_color_patterns.size > 0 -%}
+    {%- assign matched = '' -%}
+    {%- if resolved_label_lc != blank -%}
+      {%- for color_pattern in product_color_patterns -%}
+        {%- capture pl -%}{{ color_pattern.label }}{%- endcapture -%}
+        {%- assign pl_lc = pl | downcase | strip -%}
+        {%- if pl_lc == resolved_label_lc -%}
+          {{ color_pattern.color }}
+          {%- assign matched = '1' -%}
+          {%- break -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+    {%- if matched == '' -%}
+      {{ product_color_patterns.first.color }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endcapture -%}
+{%- assign product_patterns_match = product_patterns_match | strip -%}
+
+{%- liquid
+  if color_hex == '#1F1F1E' and variant_patterns_match != blank
+    assign color_hex = variant_patterns_match
+  endif
+
+  if color_hex == '#1F1F1E' and product_patterns_match != blank
+    assign color_hex = product_patterns_match
+  endif
+
+  if color_hex == '#1F1F1E' and source_product != blank
+    for product_option in source_product.options_with_values
+      for product_option_value in product_option.values
+        if product_option_value.variant.id == selected_variant.id
+          if product_option_value.swatch.color != blank
+            assign color_hex = product_option_value.swatch.color.hex
+          endif
+          break
+        endif
+      endfor
+    endfor
+  endif
+
+  if color_hex == '#1F1F1E' and source_product != blank and resolved_label != blank
+    for product_option in source_product.options_with_values
+      for product_option_value in product_option.values
+        if product_option_value.name == resolved_label
+          if product_option_value.swatch.color != blank
+            assign color_hex = product_option_value.swatch.color.hex
+          endif
+          break
+        endif
+      endfor
+    endfor
+  endif
+
+  assign color_hex = color_hex | append: '' | strip
+  if color_hex != blank
+    unless color_hex contains '#'
+      assign color_hex = '#' | append: color_hex
+    endunless
+  endif
+-%}
+{{- color_hex -}}

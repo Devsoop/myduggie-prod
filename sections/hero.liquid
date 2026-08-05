@@ -1,0 +1,2313 @@
+
+
+{% liquid
+  assign media_count = 0
+  assign media_count_mobile = 0
+  assign fallback_to_desktop = false
+  assign media_1 = 'none'
+  assign media_2 = 'none'
+  assign media_1_mobile = 'none'
+  assign media_2_mobile = 'none'
+  assign has_only_video = false
+  assign has_only_video_mobile = false
+  assign video_1 = section.settings.video_1
+  assign video_1_mobile = section.settings.video_1_mobile
+  assign video_2 = section.settings.video_2
+  assign video_2_mobile = section.settings.video_2_mobile
+  assign uses_external_video_source = false
+
+  if request.page_type == 'product' and section.settings.product_video_source == 'hero'
+    assign video_1 = product.metafields.custom.hero_video_desktop.value
+    assign video_1_mobile = product.metafields.custom.hero_video_mobile.value
+    assign uses_external_video_source = true
+  elsif request.page_type == 'product' and section.settings.product_video_source == 'turntable'
+    assign video_1 = product.metafields.custom.turntable_video_desktop.value
+    assign video_1_mobile = product.metafields.custom.turntable_video_mobile.value
+    assign uses_external_video_source = true
+  elsif request.page_type == 'page' and section.settings.product_video_source == 'page_hero'
+    assign video_1 = page.metafields.custom.hero_video_desktop.value
+    assign video_1_mobile = page.metafields.custom.hero_video_mobile.value
+    assign uses_external_video_source = true
+  endif
+
+  assign uses_pdp_video_sizing = uses_external_video_source
+  assign uses_landing_section_video = false
+  if section.settings.media_type_1 == 'video' and video_1 != blank
+    assign uses_pdp_video_sizing = true
+    if request.page_type == 'page'
+      assign uses_landing_section_video = true
+    endif
+  endif
+
+  # Desktop media checks
+  # For each media slot, check if the media is not blank and the media type matches the slot
+  # Need to check both (1) media picker is not blank AND (2) section.setting.media_type because user can toggle between different media types to display, but choosing "Image" doesn't clear a saved "Video" in the theme editor.
+  # The alternate setting (section.settings.image_1 when "Video" is selected) is only visually hidden in theme editor.
+  if section.settings.image_1 != blank and section.settings.media_type_1 == 'image'
+    assign media_1 = 'image'
+    assign media_count = media_count | plus: 1
+  endif
+  if video_1 != blank
+    if section.settings.media_type_1 == 'video' or uses_external_video_source
+      assign media_1 = 'video'
+      assign media_count = media_count | plus: 1
+    endif
+  endif
+  if section.settings.image_2 != blank and section.settings.media_type_2 == 'image'
+    assign media_2 = 'image'
+    assign media_count = media_count | plus: 1
+  endif
+  if video_2 != blank and section.settings.media_type_2 == 'video'
+    assign media_2 = 'video'
+    assign media_count = media_count | plus: 1
+  endif
+
+  if section.settings.custom_mobile_media or uses_external_video_source
+    # Mobile media checks
+    # For each media slot, check if the media is not blank and the media type matches the slot
+    if section.settings.image_1_mobile != blank and section.settings.media_type_1_mobile == 'image'
+      assign media_1_mobile = 'image'
+      assign media_count_mobile = media_count_mobile | plus: 1
+    endif
+    if video_1_mobile != blank
+      if section.settings.media_type_1_mobile == 'video' or uses_external_video_source
+        assign media_1_mobile = 'video'
+        assign media_count_mobile = media_count_mobile | plus: 1
+      endif
+    endif
+    if section.settings.image_2_mobile != blank and section.settings.media_type_2_mobile == 'image'
+      assign media_2_mobile = 'image'
+      assign media_count_mobile = media_count_mobile | plus: 1
+    endif
+    if video_2_mobile != blank and section.settings.media_type_2_mobile == 'video'
+      assign media_2_mobile = 'video'
+      assign media_count_mobile = media_count_mobile | plus: 1
+    endif
+  endif
+  assign mobile_media_count_raw = media_count_mobile
+  if media_count > 0 and media_1 != 'image' and media_2 != 'image'
+    assign has_only_video = true
+  endif
+  if mobile_media_count_raw > 0 and media_1_mobile != 'image' and media_2_mobile != 'image'
+    assign has_only_video_mobile = true
+  endif
+
+  assign has_mobile_specific_media = false
+  if section.settings.custom_mobile_media and mobile_media_count_raw > 0
+    assign has_mobile_specific_media = true
+  endif
+  if uses_external_video_source and mobile_media_count_raw > 0
+    assign has_mobile_specific_media = true
+  endif
+
+  # If custom mobile media is disabled or no mobile media is present, we may fallback to desktop media.
+  # PDP metafield heroes never fallback: no mobile metafield means no hero on mobile.
+  if section.settings.custom_mobile_media == false
+    unless has_mobile_specific_media
+      unless uses_external_video_source
+        assign media_count_mobile = media_count
+        assign fallback_to_desktop = true
+      endunless
+    endunless
+  elsif mobile_media_count_raw == 0 and media_count > 0
+    unless uses_external_video_source
+      assign media_count_mobile = media_count
+      assign fallback_to_desktop = true
+    endunless
+  endif
+
+  assign media_wrapper_desktop_class = 'hero__media-wrapper hero__media-wrapper--desktop'
+  assign media_wrapper_mobile_class = 'hero__media-wrapper hero__media-wrapper--mobile'
+  # Share desktop media on mobile only when falling back to desktop (not for PDP metafield heroes).
+  if fallback_to_desktop
+    assign media_wrapper_desktop_class = media_wrapper_desktop_class | append: ' hero__media-wrapper--mobile'
+  endif
+
+  # Should we show the blurred reflection on mobile?
+  assign show_mobile_blurred_reflection = false
+  if section.settings.blurred_reflection
+    if section.settings.custom_mobile_media == true and media_count_mobile > 0 and has_only_video_mobile == false
+      # Custom mobile media is active and a mobile image is present
+      assign show_mobile_blurred_reflection = true
+    elsif section.settings.custom_mobile_media == true and media_count_mobile == 0 and media_count > 0 and has_only_video == false
+      # Custom mobile media is active, no mobile media is present, but a desktop image is present
+      assign show_mobile_blurred_reflection = true
+    elsif section.settings.custom_mobile_media == false and media_count > 0 and has_only_video == false
+      # Custom mobile media is inactive, but a desktop image is present
+      assign show_mobile_blurred_reflection = true
+    endif
+  endif
+
+  if media_1 == 'image' and media_2 == 'image'
+    assign media_width_desktop = '50vw'
+  else
+    assign media_width_desktop = '100vw'
+  endif
+
+  assign show_media_placeholder = false
+  if media_count == 0 and mobile_media_count_raw == 0
+    assign show_media_placeholder = true
+  endif
+
+  assign slot_1_dual_viewport_video = false
+  if media_1 == 'video' and media_1_mobile == 'video'
+    assign slot_1_dual_viewport_video = true
+  endif
+  assign slot_1_defer_desktop_video = slot_1_dual_viewport_video
+  assign slot_1_defer_mobile_video = slot_1_dual_viewport_video
+
+  assign slot_2_dual_viewport_video = false
+  if media_2 == 'video' and media_2_mobile == 'video'
+    assign slot_2_dual_viewport_video = true
+  endif
+  assign slot_2_defer_desktop_video = slot_2_dual_viewport_video
+  assign slot_2_defer_mobile_video = slot_2_dual_viewport_video
+
+  assign has_desktop_hero_media = false
+  if media_count > 0
+    assign has_desktop_hero_media = true
+  endif
+
+  assign has_mobile_hero_media = false
+  if fallback_to_desktop
+    if media_count > 0
+      assign has_mobile_hero_media = true
+    endif
+  elsif mobile_media_count_raw > 0
+    assign has_mobile_hero_media = true
+  endif
+
+  if fallback_to_desktop
+    assign media_width_mobile = media_width_desktop
+  elsif section.settings.stack_media_on_mobile or media_1_mobile != 'image' or media_2_mobile != 'image'
+    assign media_width_mobile = '100vw'
+  else
+    assign media_width_mobile = '50vw'
+  endif
+
+  assign sizes = '(min-width: 750px) ' | append: media_width_desktop | append: ', ' | append: media_width_mobile
+  assign widths = '832, 1200, 1600, 1920, 2560, 3840'
+  assign sizes_mobile = media_width_mobile
+  assign mobile_widths = '416, 600, 800, 1200, 1600'
+  assign mobile_widths_array = mobile_widths | split: ', '
+
+  assign fetch_priority = 'auto'
+
+  if section.index == 1
+    assign fetch_priority = 'high'
+  endif
+
+  assign render_direct_pdp_video = false
+  if uses_pdp_video_sizing
+    assign render_direct_pdp_video = true
+  endif
+
+  assign hero_display_desktop = section.settings.video_display_behavior_desktop | default: 'full_width'
+  assign hero_display_mobile = section.settings.video_display_behavior_mobile | default: 'full_width'
+
+  if request.page_type == 'product'
+    if section.settings.product_video_source == 'hero'
+      if product.metafields.custom.hero_video_display_mode.value != blank
+        assign hero_display_desktop = product.metafields.custom.hero_video_display_mode.value
+      endif
+      if product.metafields.custom.hero_video_display_mode_mobile.value != blank
+        assign hero_display_mobile = product.metafields.custom.hero_video_display_mode_mobile.value
+      endif
+    endif
+  elsif request.page_type == 'page'
+    if section.settings.product_video_source == 'page_hero'
+      if page.metafields.custom.hero_video_display_mode.value != blank
+        assign hero_display_desktop = page.metafields.custom.hero_video_display_mode.value
+      endif
+      if page.metafields.custom.hero_video_display_mode_mobile.value != blank
+        assign hero_display_mobile = page.metafields.custom.hero_video_display_mode_mobile.value
+      endif
+    endif
+  endif
+
+  assign hero_display_desktop = hero_display_desktop | downcase | strip
+  assign hero_display_mobile = hero_display_mobile | downcase | strip
+  if hero_display_desktop contains 'height' or hero_display_desktop contains 'hight'
+    assign hero_display_desktop = 'full_height'
+  elsif hero_display_desktop contains 'width' or hero_display_desktop contains 'natural'
+    assign hero_display_desktop = 'full_width'
+  elsif hero_display_desktop == 'fill' or hero_display_desktop contains 'fill'
+    assign hero_display_desktop = 'full_height'
+  elsif hero_display_desktop contains 'constrained'
+    assign hero_display_desktop = 'full_width'
+  else
+    assign hero_display_desktop = 'full_width'
+  endif
+  if hero_display_mobile contains 'height' or hero_display_mobile contains 'hight'
+    assign hero_display_mobile = 'full_height'
+  elsif hero_display_mobile contains 'width' or hero_display_mobile contains 'natural'
+    assign hero_display_mobile = 'full_width'
+  elsif hero_display_mobile == 'fill' or hero_display_mobile contains 'fill'
+    assign hero_display_mobile = 'full_height'
+  elsif hero_display_mobile contains 'constrained'
+    assign hero_display_mobile = 'full_width'
+  else
+    assign hero_display_mobile = 'full_width'
+  endif
+%}
+
+{% capture media_slot_1 %}
+  {%- if media_1 == 'image' and media_1_mobile == 'image' -%}
+    {%- comment -%} Both desktop and mobile are images. Assume similar images, and this is art direction: use picture element. {%- endcomment -%}
+    <picture
+      data-testid="hero-picture-1"
+      class="hero__media"
+    >
+      <source
+        media="(max-width: 749px)"
+        srcset="
+          {%-  for mobile_width in mobile_widths_array -%}
+            {{ section.settings.image_1_mobile | image_url: width: mobile_width }} {{ mobile_width }}w{% unless forloop.last %},{% endunless %}
+          {%- endfor -%}
+        "
+        sizes="{{ sizes_mobile }}"
+        width="{{ section.settings.image_1_mobile.width }}"
+        height="{{ section.settings.image_1_mobile.height }}"
+      >
+      {{
+        section.settings.image_1
+        | image_url: width: 3840
+        | image_tag:
+          width: section.settings.image_1.width,
+          widths: widths,
+          height: section.settings.image_1.height,
+          alt: section.settings.image_1.alt,
+          class: 'hero__media',
+          sizes: sizes,
+          fetchpriority: fetch_priority,
+          data-testid: 'hero-desktop-image-1'
+      }}
+    </picture>
+  {%- elsif media_1 == 'image' -%}
+    <div class="{{ media_wrapper_desktop_class }}">
+      {{
+        section.settings.image_1
+        | image_url: width: 3840
+        | image_tag:
+          width: section.settings.image_1.width,
+          widths: widths,
+          height: section.settings.image_1.height,
+          alt: section.settings.image_1.alt,
+          class: 'hero__media',
+          sizes: sizes,
+          fetchpriority: fetch_priority,
+          data-testid: 'hero-desktop-image-1'
+      }}
+    </div>
+  {%- endif -%}
+
+  {%- if media_1 == 'video' -%}
+    <div class="{{ media_wrapper_desktop_class }}">
+      {% render 'video',
+        video: video_1,
+        video_autoplay: true,
+        video_loop: true,
+        disable_controls: true,
+        video_class: 'hero__media',
+        render_direct_video: render_direct_pdp_video,
+        defer_viewport_sources: slot_1_defer_desktop_video,
+        additional_attributes: 'data-testid="hero-desktop-video-1" data-hero-video-viewport="desktop"'
+      %}
+    </div>
+  {%- endif -%}
+
+  {%- if has_mobile_specific_media -%}
+    {%- comment -%} Mobile-only slot 1 media (when desktop is different type) {%- endcomment -%}
+    {%- if media_1_mobile == 'image' and media_1 != 'image' -%}
+      <div class="{{ media_wrapper_mobile_class }}">
+        {{
+          section.settings.image_1_mobile
+          | image_url: width: 1600
+          | image_tag:
+            width: section.settings.image_1_mobile.width,
+            widths: mobile_widths,
+            height: section.settings.image_1_mobile.height,
+            alt: section.settings.image_1_mobile.alt,
+            class: 'hero__media',
+            sizes: sizes_mobile,
+            fetchpriority: fetch_priority,
+            data-testid: 'hero-mobile-image-1'
+        }}
+      </div>
+    {%- endif -%}
+
+    {%- if media_1_mobile == 'video' -%}
+      <div class="{{ media_wrapper_mobile_class }}">
+        {% render 'video',
+          video: video_1_mobile,
+          video_autoplay: true,
+          video_loop: true,
+          disable_controls: true,
+          video_class: 'hero__media',
+          render_direct_video: render_direct_pdp_video,
+          defer_viewport_sources: slot_1_defer_mobile_video,
+          additional_attributes: 'data-testid="hero-mobile-video-1" data-hero-video-viewport="mobile"'
+        %}
+      </div>
+    {%- endif -%}
+  {%- endif -%}
+{% endcapture %}
+
+{% capture media_slot_2 %}
+  {%- if media_2 == 'image' and media_2_mobile == 'image' -%}
+    {%- comment -%} Both desktop and mobile are images. Assume this is art direction: use picture element.  {%- endcomment -%}
+    <picture
+      class="hero__media"
+      data-testid="hero-picture-2"
+    >
+      <source
+        media="(max-width: 749px)"
+        srcset="
+          {%-  for mobile_width in mobile_widths_array -%}
+            {{ section.settings.image_2_mobile | image_url: width: mobile_width }} {{ mobile_width }}w{% unless forloop.last%},{% endunless %}
+          {%- endfor -%}
+        "
+        sizes="{{ sizes_mobile }}"
+        width="{{ section.settings.image_2_mobile.width }}"
+        height="{{ section.settings.image_2_mobile.height }}"
+      >
+      {{
+        section.settings.image_2
+        | image_url: width: 3840
+        | image_tag:
+          width: section.settings.image_2.width,
+          widths: widths,
+          height: section.settings.image_2.height,
+          alt: section.settings.image_2.alt,
+          class: 'hero__media',
+          sizes: sizes,
+          fetchpriority: fetch_priority,
+          data-testid: 'hero-desktop-image-2'
+      }}
+    </picture>
+  {%- elsif media_2 == 'image' -%}
+    <div class="{{ media_wrapper_desktop_class }}">
+      {{
+        section.settings.image_2
+        | image_url: width: 3840
+        | image_tag:
+          width: section.settings.image_2.width,
+          widths: widths,
+          height: section.settings.image_2.height,
+          alt: section.settings.image_2.alt,
+          class: 'hero__media',
+          sizes: sizes,
+          fetchpriority: fetch_priority,
+          data-testid: 'hero-desktop-image-2'
+      }}
+    </div>
+  {%- endif -%}
+
+  {%- if media_2 == 'video' -%}
+    <div class="{{ media_wrapper_desktop_class }}">
+      {% render 'video',
+        video: video_2,
+        video_autoplay: true,
+        video_loop: true,
+        disable_controls: true,
+        video_class: 'hero__media',
+        render_direct_video: render_direct_pdp_video,
+        defer_viewport_sources: slot_2_defer_desktop_video,
+        additional_attributes: 'data-testid="hero-desktop-video-2" data-hero-video-viewport="desktop"'
+      %}
+    </div>
+  {%- endif -%}
+
+  {%- comment -%} Mobile-only slot 2 media (when desktop is different type) {%- endcomment -%}
+  {%- if has_mobile_specific_media -%}
+    {%- if media_2_mobile == 'image' and media_2 != 'image' -%}
+      <div class="{{ media_wrapper_mobile_class }}">
+        {{
+          section.settings.image_2_mobile
+          | image_url: width: 1600
+          | image_tag:
+            width: section.settings.image_2_mobile.width,
+            widths: mobile_widths,
+            height: section.settings.image_2_mobile.height,
+            alt: section.settings.image_2_mobile.alt,
+            class: 'hero__media',
+            sizes: sizes_mobile,
+            fetchpriority: fetch_priority,
+            data-testid: 'hero-mobile-image-2'
+        }}
+      </div>
+    {%- endif -%}
+
+    {%- if media_2_mobile == 'video' -%}
+      <div class="{{ media_wrapper_mobile_class }}">
+        {% render 'video',
+          video: video_2_mobile,
+          video_autoplay: true,
+          video_loop: true,
+          disable_controls: true,
+          video_class: 'hero__media',
+          render_direct_video: render_direct_pdp_video,
+          defer_viewport_sources: slot_2_defer_mobile_video,
+          additional_attributes: 'data-testid="hero-mobile-video-2" data-hero-video-viewport="mobile"'
+        %}
+      </div>
+    {%- endif -%}
+  {%- endif -%}
+{% endcapture %}
+
+{% capture media %}
+  {{ media_slot_1 }}
+  {{ media_slot_2 }}
+
+  {% if show_media_placeholder %}
+    {{ 'hero-apparel-1' | placeholder_svg_tag: 'hero__media' }}
+  {%- endif -%}
+{% endcapture %}
+
+{% capture media_blurred %}
+  {% if media_1 == 'image' %}
+    {{
+      section.settings.image_1
+      | image_url: width: 3840
+      | image_tag:
+        width: section.settings.image_1.width,
+        widths: widths,
+        height: section.settings.image_1.height,
+        alt: '',
+        class: 'hero__media',
+        sizes: sizes
+    }}
+  {% endif %}
+  {% if media_2 == 'image' %}
+    {{
+      section.settings.image_2
+      | image_url: width: 3840
+      | image_tag:
+        width: section.settings.image_2.width,
+        widths: widths,
+        height: section.settings.image_2.height,
+        alt: '',
+        class: 'hero__media',
+        sizes: sizes
+    }}
+  {% endif %}
+  {% if show_media_placeholder %}
+    {{ 'hero-apparel-1' | placeholder_svg_tag: 'hero__media' }}
+  {% endif %}
+{% endcapture %}
+
+{% capture mobile_media_blurred %}
+  {%- comment -%}
+    On mobile we need to check:
+    1. If the media should be stacked. If it is,we check for the second (bottom) image first, then for the first (top) image.
+    2. If custom mobile setting is active and has media (show desktop media otherwise).
+  {%- endcomment -%}
+  {% if section.settings.stack_media_on_mobile == false %}
+    {% if section.settings.custom_mobile_media == true and fallback_to_desktop == false %}
+      {% if media_1_mobile == 'image' %}
+        {{ section.settings.image_1_mobile
+          | image_url: width: 1600
+          | image_tag: width: section.settings.image_1_mobile.width,
+            widths: mobile_widths,
+            height: section.settings.image_1_mobile.height,
+            alt: '',
+            class: 'hero__media',
+            sizes: sizes_mobile
+          }}
+      {% endif %}
+      {% if media_2_mobile == 'image' %}
+        {{ section.settings.image_2_mobile
+          | image_url: width: 1600
+          | image_tag: width: section.settings.image_2_mobile.width,
+            widths: mobile_widths,
+            height: section.settings.image_2_mobile.height,
+            alt: '',
+            class: 'hero__media',
+            sizes: sizes_mobile
+          }}
+      {% endif %}
+    {% elsif fallback_to_desktop %}
+      {{ media_blurred }}
+    {% endif %}
+  {% elsif section.settings.stack_media_on_mobile == true %}
+    {% if section.settings.custom_mobile_media == true and fallback_to_desktop == false %}
+      {% if media_2_mobile == 'image' %}
+        {{ section.settings.image_2_mobile
+          | image_url: width: 1600
+          | image_tag: width: section.settings.image_2_mobile.width,
+            widths: mobile_widths,
+            height: section.settings.image_2_mobile.height,
+            alt: '',
+            class: 'hero__media',
+            sizes: sizes_mobile
+        }}
+      {% elsif media_1_mobile == 'image' %}
+        {{ section.settings.image_1_mobile
+          | image_url: width: 1600
+          | image_tag: width: section.settings.image_1_mobile.width,
+            widths: mobile_widths,
+            height: section.settings.image_1_mobile.height,
+            alt: '',
+            class: 'hero__media',
+            sizes: sizes_mobile
+          }}
+      {% endif %}
+    {% elsif fallback_to_desktop %}
+      {% if media_count > 0 %}
+        {% if media_2 == 'image' %}
+          {{ section.settings.image_2
+            | image_url: width: 1600
+            | image_tag: width: section.settings.image_2.width,
+              widths: widths,
+              height: section.settings.image_2.height,
+              alt: '',
+              class: 'hero__media',
+              sizes: sizes
+            }}
+        {% elsif media_1 == 'image' %}
+          {{ section.settings.image_1
+            | image_url: width: 1600
+            | image_tag: width: section.settings.image_1.width,
+              widths: widths,
+              height: section.settings.image_1.height,
+              alt: '',
+              class: 'hero__media',
+              sizes: sizes
+            }}
+        {% endif %}
+        {% if show_media_placeholder %}
+          {{ 'hero-apparel-1' | placeholder_svg_tag: 'hero__media' }}
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endcapture %}
+
+{% liquid
+  assign has_any_hero_media = false
+  if has_desktop_hero_media or has_mobile_hero_media
+    assign has_any_hero_media = true
+  endif
+%}
+{% if has_any_hero_media %}
+<div
+  id="Hero-{{ section.id }}"
+  class="hero color-{{ section.settings.color_scheme }}{% if uses_pdp_video_sizing %} hero--pdp-video{% endif %}{% if uses_landing_section_video %} hero--landing-section-video{% endif %}{% if section.blocks.size == 0 and section.settings.section_height == 'auto' %} hero--no-blocks-auto-height{% endif %}{% if section.settings.stack_media_on_mobile %} hero--stack-mobile{% endif %}"
+  data-hero-display-desktop="{{ hero_display_desktop }}"
+  data-hero-display-mobile="{{ hero_display_mobile }}"
+  data-hero-has-desktop-media="{% if has_desktop_hero_media %}true{% else %}false{% endif %}"
+  data-hero-has-mobile-media="{% if has_mobile_hero_media %}true{% else %}false{% endif %}"
+  data-hero-has-mobile-specific-media="{% if has_mobile_specific_media %}true{% else %}false{% endif %}"
+  style="
+    --hero-border-style: {{ section.settings.border }};
+    --hero-border-width: {{ section.settings.border_width }}px;
+    --hero-border-opacity: {{ section.settings.border_opacity }}%;
+    --blur-opacity: {{ section.settings.reflection_opacity | divided_by: 100.0 }};
+    {% if section.settings.section_height == 'custom' %}
+      --hero-min-height: {{ section.settings.section_height_custom }}svh;
+    {% elsif section.settings.section_height == "full-screen" %}
+       --hero-min-height: 100svh;
+    {% else %}
+      --hero-min-height: var(--section-height-{{ section.settings.section_height }});
+    {% endif %}
+    {%- if uses_pdp_video_sizing -%}
+      --hero-available-width: 100vw;
+      {%- if video_1_mobile.preview_image != blank -%}
+        --hero-media-aspect-ratio-mobile: {{ video_1_mobile.preview_image.aspect_ratio }};
+      {%- elsif video_1_mobile != blank -%}
+        --hero-media-aspect-ratio-mobile: 0.5625;
+      {%- elsif video_1 != blank -%}
+        --hero-media-aspect-ratio-mobile: {{ video_1.aspect_ratio | default: 1.777 }};
+      {%- endif -%}
+    {%- endif -%}
+  "
+  {% if template.suffix == 'standard-pdp' and section.settings.product_video_source != 'none' %}
+    data-hero-auto-hide
+  {% elsif has_only_video %}
+    data-hero-auto-hide
+  {% elsif has_only_video_mobile %}
+    data-hero-auto-hide
+  {% endif %}
+  {% if request.visual_preview_mode %}
+    data-shopify-visual-preview
+  {% endif %}
+  {% if section.settings.blurred_reflection and has_only_video == false or has_only_video_mobile == false %}
+    data-blur-shadow="true"
+  {% endif %}
+>
+  {% if section.settings.blurred_reflection %}
+    {% unless has_only_video %}
+      <div
+        class="hero__blurred-image hero__blurred-image--desktop"
+        data-testid="hero-blurred-image-desktop"
+      >
+        {{ media_blurred }}
+      </div>
+    {% endunless %}
+    {% if show_mobile_blurred_reflection %}
+      <div
+        class="hero__blurred-image hero__blurred-image--mobile"
+        data-testid="hero-blurred-image-mobile"
+      >
+        {{ mobile_media_blurred }}
+      </div>
+    {% endif %}
+  {% endif %}
+
+  {% comment %}
+    Hardcoded to section--full-width bc the media has to be full width in all cases.
+    hero__content-wrapper applies section_width.
+  {% endcomment %}
+
+  <div
+    class="hero__container spacing-style section section--full-width"
+    style="{% render 'spacing-style', settings: section.settings %} --padding-block-start: 0px;"
+  >
+    {%- if section.settings.link != blank -%}
+      <a
+        href="{{ section.settings.link }}"
+        class="hero__link"
+        {% if section.settings.open_in_new_tab %}
+          target="_blank" rel="noopener"
+        {% endif %}
+      ></a>
+    {%- endif -%}
+    <div
+      class="hero__media-grid"
+      style="
+        --hero-media-count: {{ media_count }};
+        --hero-media-count-mobile: {{ media_count_mobile }};
+        {%- if section.settings.media_type_1 == 'video' -%}
+          {%- if video_1.preview_image != blank -%}
+            --hero-media-aspect-ratio: {{ video_1.preview_image.aspect_ratio }};
+          {%- elsif video_1 != blank -%}
+            --hero-media-aspect-ratio: {{ video_1.aspect_ratio | default: 1.777 }};
+          {%- endif -%}
+        {%- elsif section.settings.image_1 != blank -%}
+          --hero-media-aspect-ratio: {{ section.settings.image_1.aspect_ratio }};
+        {%- endif -%}
+        {%- if section.settings.media_type_1_mobile == 'video' -%}
+          {%- if video_1_mobile.preview_image != blank -%}
+            --hero-media-aspect-ratio-mobile: {{ video_1_mobile.preview_image.aspect_ratio }};
+          {%- elsif video_1_mobile != blank -%}
+            --hero-media-aspect-ratio-mobile: 0.5625;
+          {%- endif -%}
+        {%- elsif section.settings.image_1_mobile != blank -%}
+          --hero-media-aspect-ratio-mobile: {{ section.settings.image_1_mobile.aspect_ratio }};
+        {%- endif -%}
+      "
+      data-testid="hero-media-wrapper"
+    >
+      {% liquid
+        if section.settings.toggle_overlay
+          render 'overlay', settings: section.settings
+        endif
+      %}
+      {%- if has_mobile_specific_media -%}
+        <style>
+          @media screen and (max-width: 749px) {
+            #Hero-{{ section.id }} .hero__media-wrapper--desktop:not(.hero__media-wrapper--mobile),
+            #Hero-{{ section.id }} video[data-hero-video-viewport='desktop'] {
+              display: none !important;
+              visibility: hidden !important;
+              height: 0 !important;
+              max-height: 0 !important;
+              overflow: hidden !important;
+              pointer-events: none !important;
+            }
+          }
+          @media screen and (min-width: 750px) {
+            #Hero-{{ section.id }} .hero__media-wrapper--mobile:not(.hero__media-wrapper--desktop),
+            #Hero-{{ section.id }} video[data-hero-video-viewport='mobile'] {
+              display: none !important;
+              visibility: hidden !important;
+              height: 0 !important;
+              max-height: 0 !important;
+              overflow: hidden !important;
+              pointer-events: none !important;
+            }
+          }
+        </style>
+      {%- endif -%}
+      {{ media }}
+      {%- if has_mobile_specific_media -%}
+        <script>
+          (function () {
+            if (!window.matchMedia('(max-width: 749px)').matches) return;
+            var hero = document.currentScript && document.currentScript.closest('.hero');
+            if (!hero) return;
+            hero
+              .querySelectorAll('.hero__media-wrapper--desktop:not(.hero__media-wrapper--mobile)')
+              .forEach(function (wrapper) {
+                wrapper.remove();
+              });
+            hero.querySelectorAll('video[data-hero-video-viewport="desktop"]').forEach(function (video) {
+              video.pause();
+              video.querySelectorAll('source').forEach(function (source) {
+                source.remove();
+              });
+              video.remove();
+            });
+          })();
+        </script>
+      {%- endif -%}
+    </div>
+    <div
+      class="
+        hero__content-wrapper
+        layout-panel-flex
+        layout-panel-flex--{{ section.settings.content_direction }}
+        {% if section.settings.vertical_on_mobile %}mobile-column{% endif %}
+        section-content-wrapper
+        {{section.settings.section_width}}
+        {% if request.design_mode %}hero__content-wrapper--design-mode{% endif %}
+      "
+      style="{% render 'layout-panel-style', settings: section.settings %}"
+    >
+      {% content_for 'blocks' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% stylesheet %}
+  .hero-wrapper {
+    --hero-height-offset: 0px;
+    --hero-first-fold-bottom-inset: 0px;
+    --hero-available-width: 100vw;
+    --hero-available-height: calc(100svh - var(--hero-first-fold-bottom-inset));
+    --hero-first-fold-height: var(--hero-available-height);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .hero-wrapper:not(:has(.hero)) {
+    height: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @media screen and (min-width: 750px) {
+    .hero-wrapper:has(> .hero[data-hero-has-desktop-media='false']) {
+      display: none;
+    }
+  }
+
+  @media screen and (max-width: 749px) {
+    .hero-wrapper:has(> .hero[data-hero-has-mobile-media='false']) {
+      display: none;
+    }
+  }
+
+  .hero-wrapper:has(> .hero--pdp-video),
+  .hero-wrapper:has(> .hero--landing-section-video),
+  .hero-wrapper:has(> .hero[data-hero-display-desktop='full_width']),
+  .hero-wrapper:has(> .hero[data-hero-display-desktop='full_height']) {
+    height: auto;
+    min-height: 0;
+    align-items: flex-start;
+  }
+
+  @media screen and (max-width: 749px) {
+    .hero-wrapper:has(> .hero--pdp-video):not(:has(> .hero--landing-section-video)),
+    .hero-wrapper:has(> .hero[data-hero-display-mobile='full_width']):not(:has(> .hero--landing-section-video)),
+    .hero-wrapper:has(> .hero[data-hero-display-mobile='full_height']):not(:has(> .hero--landing-section-video)) {
+      min-height: var(--hero-first-fold-height);
+      align-items: center;
+    }
+
+    .hero-wrapper:has(> .hero--landing-section-video):not(:has(> .hero[data-hero-display-mobile='full_height'])) {
+      min-height: 0;
+      align-items: flex-start;
+    }
+  }
+
+  .hero-wrapper > .hero {
+    width: 100%;
+  }
+
+  /* Subtract header only when it pushes content (non-transparent). */
+  body:has(> #header-group > .header-section > #header-component:not([transparent])) .hero-wrapper:first-child {
+    --hero-height-offset: var(--header-height, 0px);
+    --hero-available-height: calc(100svh - var(--header-height, 0px) - var(--hero-first-fold-bottom-inset));
+    --hero-first-fold-height: var(--hero-available-height);
+  }
+
+  body:has(> #header-group > .header-section > #header-component[transparent]) .hero-wrapper:first-child {
+    --hero-height-offset: 0px;
+    --hero-available-height: calc(100svh - var(--hero-first-fold-bottom-inset));
+    --hero-first-fold-height: var(--hero-available-height);
+  }
+
+  .hero--pdp-video {
+    --hero-first-fold-bottom-inset: 0px;
+    --hero-available-height: calc(100svh - var(--hero-first-fold-bottom-inset));
+    --hero-first-fold-height: var(--hero-available-height);
+  }
+
+  body:has(> #header-group > .header-section > #header-component:not([transparent])) .hero-wrapper:first-child .hero--pdp-video {
+    --hero-available-height: calc(100svh - var(--header-height, 0px) - var(--hero-first-fold-bottom-inset));
+    --hero-first-fold-height: var(--hero-available-height);
+  }
+
+  body:has(> #header-group > .header-section > #header-component[transparent]) .hero-wrapper:first-child .hero--pdp-video {
+    --hero-available-height: calc(100svh - var(--hero-first-fold-bottom-inset));
+    --hero-first-fold-height: var(--hero-available-height);
+  }
+
+  .hero {
+    position: relative;
+    min-height: calc(var(--hero-min-height) - var(--hero-height-offset));
+  }
+
+  .hero[data-shopify-visual-preview]:not(.hero--pdp-video):not(.hero--landing-section-video) {
+    --hero-min-height: 600px;
+
+    min-height: 600px;
+  }
+
+  .hero__container {
+    position: relative;
+    overflow: hidden;
+    border: var(--hero-border-width) var(--hero-border-style) rgb(var(--color-border-rgb) / var(--hero-border-opacity));
+    min-height: inherit;
+    align-items: var(--vertical-alignment-mobile);
+    justify-content: var(--horizontal-alignment);
+    z-index: var(--layer-base);
+    --padding-block-start: 0px;
+    padding-block-start: 0;
+
+    @media screen and (min-width: 750px) {
+      align-items: var(--vertical-alignment);
+    }
+  }
+
+  .hero__content-wrapper.page-width {
+    grid-column: 2 / 3;
+  }
+
+  .hero__content-wrapper {
+    position: relative;
+    inset: 0;
+    z-index: var(--layer-flat);
+  }
+
+  .hero__content-wrapper .group-block-content {
+    position: relative;
+  }
+
+  .hero__media-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(var(--hero-media-count, 1), 1fr);
+  }
+
+  .hero--auto .hero__media {
+    aspect-ratio: var(--hero-media-aspect-ratio);
+  }
+
+  .hero--no-blocks-auto-height {
+    .hero__media {
+      width: 100%;
+      aspect-ratio: auto;
+    }
+
+    .hero__media-grid {
+      /* When there are no blocks and the height is auto, allow the image to appear. */
+      position: relative;
+    }
+  }
+
+  .hero__media-wrapper {
+    overflow: hidden;
+    position: relative;
+  }
+
+  video.hero__media,
+  iframe.hero__media,
+  .hero__media {
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+    object-position: center center;
+    overflow: hidden;
+    position: relative;
+    z-index: var(--layer-base);
+  }
+
+  .hero[data-hero-display-desktop='full_width'] :is(
+      video.hero__media,
+      iframe.hero__media,
+      .hero__media video,
+      .hero__media iframe,
+      .hero__media .deferred-media__poster-button,
+      .hero__media .deferred-media__poster-button img,
+      .hero__media .deferred-media__poster-button ~ video
+    ) {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .hero[data-hero-display-desktop='full_height'] :is(
+      video.hero__media,
+      iframe.hero__media,
+      .hero__media video,
+      .hero__media iframe,
+      .hero__media .deferred-media__poster-button,
+      .hero__media .deferred-media__poster-button img,
+      .hero__media .deferred-media__poster-button ~ video
+    ),
+  .hero[data-hero-display-mobile='full_height'] :is(
+      video.hero__media,
+      iframe.hero__media,
+      .hero__media video,
+      .hero__media iframe,
+      .hero__media .deferred-media__poster-button,
+      .hero__media .deferred-media__poster-button img,
+      .hero__media .deferred-media__poster-button ~ video
+    ) {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center center;
+  }
+
+  .hero--landing-section-video {
+    --hero-landing-container-height: var(--hero-available-height);
+  }
+
+  @media screen and (min-width: 750px) {
+    .hero-wrapper:has(> .hero--landing-section-video[data-hero-display-desktop='full_height']) {
+      min-height: var(--hero-available-height);
+      height: auto;
+    }
+  }
+
+  @media screen and (max-width: 749px) {
+    .hero-wrapper:has(> .hero--landing-section-video[data-hero-display-mobile='full_height']) {
+      min-height: var(--hero-first-fold-height);
+      height: auto;
+      align-items: flex-start;
+    }
+  }
+
+  @media screen and (min-width: 750px) {
+    .hero[data-hero-display-desktop='full_width'] {
+      max-height: none;
+      min-height: 0;
+      height: auto;
+    }
+
+    .hero[data-hero-display-desktop='full_width'] .hero__container {
+      width: 100%;
+      max-width: var(--hero-available-width, 100vw);
+      height: calc(var(--hero-available-width, 100vw) / var(--hero-media-aspect-ratio, 1.777));
+      min-height: 0;
+      display: grid;
+      grid-template: 1fr / 1fr;
+    }
+
+    .hero[data-hero-display-desktop='full_width'] .hero__media-grid {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      inset: auto;
+      grid-area: 1 / 1;
+      background: var(--color-background);
+    }
+
+    .hero[data-hero-display-desktop='full_width'] .hero__content-wrapper {
+      grid-area: 1 / 1;
+      align-self: stretch;
+      justify-self: stretch;
+    }
+
+    .hero[data-hero-display-desktop='full_width'] .hero__media-wrapper {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hero[data-hero-display-desktop='full_height'] {
+      min-height: 0;
+      max-height: var(--hero-available-height);
+    }
+
+    .hero[data-hero-display-desktop='full_height'] .hero__container {
+      height: var(--hero-available-height);
+      min-height: 0;
+      display: grid;
+      grid-template: 1fr / 1fr;
+    }
+
+    .hero[data-hero-display-desktop='full_height'] .hero__media-grid {
+      width: min(100%, calc(var(--hero-available-height) * var(--hero-media-aspect-ratio, 1.777)));
+      height: 100%;
+      margin-inline: auto;
+      position: relative;
+      grid-area: 1 / 1;
+      background: var(--color-background);
+    }
+
+    .hero[data-hero-display-desktop='full_height'] .hero__content-wrapper {
+      grid-area: 1 / 1;
+      align-self: stretch;
+      justify-self: stretch;
+    }
+
+    .hero[data-hero-display-desktop='full_height'] .hero__media-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      width: 100%;
+    }
+
+    .hero[data-hero-display-desktop='full_width'] .hero__container,
+    .hero[data-hero-display-desktop='full_height'] .hero__container {
+      min-height: 0;
+    }
+  }
+
+  @media screen and (max-width: 749px) {
+    .hero[data-hero-display-mobile='full_width'] {
+      max-height: none;
+      min-height: 0;
+    }
+
+    .hero[data-hero-display-mobile='full_width'] .hero__container {
+      width: 100%;
+      max-width: var(--hero-available-width, 100vw);
+      height: calc(
+        var(--hero-available-width, 100vw) / var(--hero-media-aspect-ratio-mobile, var(--hero-media-aspect-ratio, 0.5625))
+      );
+      min-height: 0;
+      display: grid;
+      grid-template: 1fr / 1fr;
+    }
+
+    .hero[data-hero-display-mobile='full_width'] .hero__media-grid {
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      position: relative;
+      grid-area: 1 / 1;
+      background: var(--color-background);
+    }
+
+    .hero[data-hero-display-mobile='full_width'] .hero__content-wrapper {
+      grid-area: 1 / 1;
+      align-self: stretch;
+      justify-self: stretch;
+    }
+
+    .hero[data-hero-display-mobile='full_width'] :is(
+        video.hero__media,
+        iframe.hero__media,
+        .hero__media video,
+        .hero__media iframe,
+        .hero__media .deferred-media__poster-button,
+        .hero__media .deferred-media__poster-button img,
+        .hero__media .deferred-media__poster-button ~ video
+      ) {
+      object-position: center center;
+    }
+
+    .hero[data-hero-display-mobile='full_width'] .hero__media-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hero--pdp-video:not(.hero--landing-section-video)[data-hero-display-mobile='full_width'] {
+      min-height: var(--hero-first-fold-height);
+      max-height: var(--hero-first-fold-height);
+    }
+
+    .hero--pdp-video:not(.hero--landing-section-video)[data-hero-display-mobile='full_width'] .hero__container {
+      height: var(--hero-first-fold-height);
+      min-height: var(--hero-first-fold-height);
+    }
+
+    .hero[data-hero-display-mobile='full_height'] {
+      min-height: 0;
+      max-height: var(--hero-available-height);
+    }
+
+    .hero[data-hero-display-mobile='full_height'] .hero__container {
+      height: var(--hero-available-height);
+      min-height: 0;
+      display: grid;
+      grid-template: 1fr / 1fr;
+    }
+
+    .hero[data-hero-display-mobile='full_height'] .hero__media-grid {
+      width: min(
+        100%,
+        calc(var(--hero-available-height) * var(--hero-media-aspect-ratio-mobile, var(--hero-media-aspect-ratio, 0.5625)))
+      );
+      height: 100%;
+      margin-inline: auto;
+      position: relative;
+      grid-area: 1 / 1;
+      background: var(--color-background);
+    }
+
+    .hero[data-hero-display-mobile='full_height'] .hero__content-wrapper {
+      grid-area: 1 / 1;
+      align-self: stretch;
+      justify-self: stretch;
+    }
+
+    .hero[data-hero-display-mobile='full_height'] .hero__media-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      width: 100%;
+    }
+  }
+
+  .hero--pdp-video .hero__media-grid {
+    background: var(--color-background);
+  }
+
+  .hero--pdp-video .deferred-media__poster-button {
+    background: var(--color-background);
+    pointer-events: none;
+  }
+
+  .hero--pdp-video[data-hero-display-desktop='full_width'] .deferred-media__poster-button img {
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  @media screen and (max-width: 749px) {
+    .hero--pdp-video[data-hero-display-mobile='full_width'] .deferred-media__poster-button img {
+      object-fit: contain;
+      object-position: center center;
+    }
+  }
+
+  .hero--pdp-video[data-hero-display-desktop='full_height'] .deferred-media__poster-button img,
+  .hero--pdp-video[data-hero-display-mobile='full_height'] .deferred-media__poster-button img {
+    object-fit: contain;
+    object-position: center center;
+  }
+
+  .hero--pdp-video,
+  .hero--pdp-video div {
+    transition: all 1s ease-in-out !important;
+  }
+
+  /* Mobile/Desktop media visibility */
+
+  .hero .hero__media-wrapper--mobile {
+    display: none;
+  }
+
+  .hero .hero__media-wrapper--desktop {
+    display: block;
+  }
+
+  @media screen and (min-width: 750px) {
+    .hero[data-hero-has-mobile-specific-media='true']
+      .hero__media-wrapper--mobile:not(.hero__media-wrapper--desktop) {
+      display: none !important;
+      visibility: hidden;
+      height: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .hero[data-hero-has-mobile-specific-media='true'] video[data-hero-video-viewport='mobile'] {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+    }
+  }
+
+  @media screen and (max-width: 749px) {
+    .hero .hero__media-wrapper--desktop {
+      display: none;
+    }
+
+    .hero[data-hero-has-mobile-specific-media='true']
+      .hero__media-wrapper--desktop:not(.hero__media-wrapper--mobile) {
+      display: none !important;
+      visibility: hidden;
+      height: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .hero[data-hero-has-mobile-specific-media='true'] video[data-hero-video-viewport='desktop'] {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+    }
+
+    .hero[data-hero-display-mobile='full_width'] .hero__media-wrapper--desktop:not(.hero__media-wrapper--mobile),
+    .hero[data-hero-display-mobile='full_height'] .hero__media-wrapper--desktop:not(.hero__media-wrapper--mobile) {
+      display: none;
+    }
+
+    .hero .hero__media-wrapper--mobile {
+      display: block;
+    }
+
+    .hero[data-hero-display-mobile='full_width'] .hero__media-wrapper--mobile,
+    .hero[data-hero-display-mobile='full_height'] .hero__media-wrapper--mobile {
+      display: flex;
+    }
+
+    .hero__media-grid {
+      grid-template-columns: repeat(var(--hero-media-count-mobile, 1), 1fr);
+    }
+
+    /* Mobile stacking */
+    .hero--stack-mobile .hero__media-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(var(--hero-media-count-mobile, 1), calc(100% / var(--hero-media-count-mobile, 1)));
+    }
+  }
+
+  .hero__link {
+    position: absolute;
+    inset: 0;
+    grid-column: 1 / -1;
+  }
+
+  .hero__media-grid,
+  .hero__content-wrapper {
+    pointer-events: none;
+
+    :is(a, button, input, textarea, select, details, summary) {
+      pointer-events: auto;
+    }
+  }
+
+  .hero__content-wrapper--design-mode * {
+    pointer-events: auto;
+  }
+
+  .hero[data-blur-shadow='true'] {
+    --blurred-reflection-filter-saturate: saturate(1.5);
+    --blurred-reflection-mask-image: linear-gradient(to bottom, #000 0%, #000 60%, transparent 100%);
+    --blurred-reflection-box-shadow: rgb(0 0 0 / 5%) 0 0 1rem;
+    --blurred-reflection-filter-blur: blur(20px);
+    --blurred-reflection-scale: scale(2, 1.25);
+    --blurred-reflection-padding-block-end: 60px;
+  }
+
+  .hero[data-blur-shadow='true'] .hero__container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    box-shadow: var(--blurred-reflection-box-shadow);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .hero__blurred-image {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    mask-image: var(--blurred-reflection-mask-image);
+    filter: var(--blurred-reflection-filter-saturate);
+    pointer-events: none;
+    transform: translateY(50%);
+    overflow: hidden;
+  }
+
+  .hero__blurred-image--desktop {
+    display: none;
+
+    @media screen and (min-width: 750px) {
+      display: block;
+    }
+  }
+
+  .hero__blurred-image--mobile {
+    display: block;
+
+    @media screen and (min-width: 750px) {
+      display: none;
+    }
+  }
+
+  .hero__blurred-image img,
+  .hero__blurred-image svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    filter: var(--blurred-reflection-filter-blur);
+    opacity: var(--blur-opacity);
+    transform: var(--blurred-reflection-scale);
+    padding-block-end: var(--blurred-reflection-padding-block-end);
+
+    &:not(:only-child) {
+      width: 50%;
+
+      &:last-child {
+        right: 0;
+        left: auto;
+      }
+    }
+  }
+{% endstylesheet %}
+
+{% javascript %}
+  const heroMobileMq = window.matchMedia('(max-width: 749px)');
+
+  function loadHeroViewportVideo(video) {
+    if (video.dataset.heroVideoLoaded) return;
+
+    const sources = JSON.parse(video.dataset.heroVideoSources);
+    sources.forEach(({ url, type }) => {
+      const source = document.createElement('source');
+      source.src = url;
+      source.type = type;
+      video.appendChild(source);
+    });
+
+    video.preload = 'auto';
+    video.load();
+    video.play().catch(() => {});
+    video.dataset.heroVideoLoaded = 'true';
+
+    // Seamless loop, HLS-safe: handled by the shared dual-buffer implementation
+    // in snippets/video.liquid (avoids the segment re-fetch stutter a plain
+    // seek-to-0 causes on .m3u8 streams).
+    if (typeof applyDualBufferLoop === 'function') {
+      applyDualBufferLoop(video);
+    }
+  }
+
+  function shouldLoadHeroVideo(video, isMobile, hasMobileSpecificMedia) {
+    if (!hasMobileSpecificMedia) return true;
+
+    const viewport = video.dataset.heroVideoViewport;
+    if (!viewport) return true;
+    if (isMobile) return viewport === 'mobile';
+    return viewport === 'desktop';
+  }
+
+  function removeHeroVideoElement(video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.querySelectorAll('source').forEach((source) => source.remove());
+    const wrapper = video.closest('.hero__media-wrapper');
+    if (wrapper) {
+      wrapper.remove();
+    } else {
+      video.remove();
+    }
+  }
+
+  function initHeroViewportVideos(hero) {
+    const isMobile = heroMobileMq.matches;
+    const hasMobileSpecificMedia = hero.dataset.heroHasMobileSpecificMedia === 'true';
+    const hasMobileMedia = hero.dataset.heroHasMobileMedia === 'true';
+    const desktopOnly = hero.querySelectorAll(
+      '.hero__media-wrapper--desktop:not(.hero__media-wrapper--mobile)'
+    );
+    const mobileOnly = hero.querySelectorAll(
+      '.hero__media-wrapper--mobile:not(.hero__media-wrapper--desktop)'
+    );
+
+    if (isMobile && !hasMobileMedia) {
+      desktopOnly.forEach((wrapper) => wrapper.remove());
+      hero.querySelectorAll('video[data-hero-video-viewport="desktop"]').forEach((video) => {
+        removeHeroVideoElement(video);
+      });
+      return;
+    }
+
+    if (isMobile && hasMobileSpecificMedia) {
+      desktopOnly.forEach((wrapper) => wrapper.remove());
+    } else if (!isMobile && hasMobileSpecificMedia) {
+      mobileOnly.forEach((wrapper) => wrapper.remove());
+    }
+
+    hero.querySelectorAll('video[data-hero-video-viewport]').forEach((video) => {
+      if (hasMobileSpecificMedia && !shouldLoadHeroVideo(video, isMobile, hasMobileSpecificMedia)) {
+        removeHeroVideoElement(video);
+      }
+    });
+
+    hero.querySelectorAll('[data-hero-video-sources]').forEach((video) => {
+      if (shouldLoadHeroVideo(video, isMobile, hasMobileSpecificMedia)) {
+        loadHeroViewportVideo(video);
+      }
+    });
+  }
+
+  function initAllHeroViewportVideos() {
+    document.querySelectorAll('.hero').forEach(initHeroViewportVideos);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAllHeroViewportVideos);
+  } else {
+    initAllHeroViewportVideos();
+  }
+{% endjavascript %}
+
+{% schema %}
+{
+  "name": "t:names.hero",
+  "tag": "section",
+  "class": "hero-wrapper section-wrapper",
+  "blocks": [
+    {
+      "type": "@theme"
+    },
+    {
+      "type": "text"
+    },
+    {
+      "type": "button"
+    },
+    {
+      "type": "logo"
+    },
+    {
+      "type": "jumbo-text"
+    },
+    {
+      "type": "spacer"
+    },
+    {
+      "type": "group"
+    },
+    {
+      "type": "_marquee"
+    }
+  ],
+  "disabled_on": {
+    "groups": ["header"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "t:content.media_1"
+    },
+    {
+      "type": "select",
+      "id": "product_video_source",
+      "label": "Video source",
+      "options": [
+        {
+          "value": "settings",
+          "label": "Section settings"
+        },
+        {
+          "value": "page_hero",
+          "label": "Page hero metafields"
+        },
+        {
+          "value": "hero",
+          "label": "Product hero metafields"
+        },
+        {
+          "value": "turntable",
+          "label": "Product turntable metafields"
+        }
+      ],
+      "default": "settings"
+    },
+    {
+      "type": "select",
+      "id": "media_fit",
+      "label": "Media fit",
+      "info": "Legacy fallback only. Use Video display behavior settings instead.",
+      "options": [
+        {
+          "value": "fill",
+          "label": "Fill"
+        },
+        {
+          "value": "fit",
+          "label": "Fit"
+        }
+      ],
+      "default": "fill"
+    },
+    {
+      "type": "select",
+      "id": "video_display_behavior_desktop",
+      "label": "Video display behavior (desktop)",
+      "info": "Full width spans container width; full height spans available viewport height. Product metafields override on PDP.",
+      "options": [
+        {
+          "value": "full_width",
+          "label": "Full width"
+        },
+        {
+          "value": "full_height",
+          "label": "Full height"
+        }
+      ],
+      "default": "full_width",
+      "visible_if": "{{ section.settings.media_type_1 == 'video' }}"
+    },
+    {
+      "type": "checkbox",
+      "id": "use_video_aspect_ratio",
+      "label": "Use 16:9 video aspect ratio",
+      "info": "Deprecated. Use Video display behavior instead.",
+      "default": false,
+      "visible_if": "{{ section.settings.media_type_1 == 'video' }}"
+    },
+    {
+      "type": "select",
+      "id": "media_type_1",
+      "label": "t:settings.type",
+      "options": [
+        {
+          "value": "image",
+          "label": "t:options.image"
+        },
+        {
+          "value": "video",
+          "label": "t:options.video"
+        }
+      ],
+      "default": "image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_1",
+      "label": "t:settings.image",
+      "visible_if": "{{ section.settings.media_type_1 == 'image' }}"
+    },
+    {
+      "type": "video",
+      "id": "video_1",
+      "label": "t:settings.video",
+      "visible_if": "{{ section.settings.media_type_1 == 'video' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.media_2"
+    },
+    {
+      "type": "select",
+      "id": "media_type_2",
+      "label": "t:settings.type",
+      "options": [
+        {
+          "value": "image",
+          "label": "t:options.image"
+        },
+        {
+          "value": "video",
+          "label": "t:options.video"
+        }
+      ],
+      "default": "image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_2",
+      "label": "t:settings.image",
+      "visible_if": "{{ section.settings.media_type_2 == 'image' }}"
+    },
+    {
+      "type": "video",
+      "id": "video_2",
+      "label": "t:settings.video",
+      "visible_if": "{{ section.settings.media_type_2 == 'video' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.mobile_media"
+    },
+    {
+      "type": "checkbox",
+      "id": "stack_media_on_mobile",
+      "label": "t:settings.stack_media_on_mobile",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "custom_mobile_media",
+      "label": "t:settings.custom_mobile_media",
+      "default": false
+    },
+    {
+      "type": "select",
+      "id": "video_display_behavior_mobile",
+      "label": "Video display behavior (mobile)",
+      "info": "Applies to mobile hero video, including when using desktop video as fallback.",
+      "options": [
+        {
+          "value": "full_width",
+          "label": "Full width"
+        },
+        {
+          "value": "full_height",
+          "label": "Full height"
+        }
+      ],
+      "default": "full_width",
+      "visible_if": "{{ section.settings.media_type_1 == 'video' or section.settings.media_type_1_mobile == 'video' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.mobile_media_1",
+      "visible_if": "{{ section.settings.custom_mobile_media }}"
+    },
+    {
+      "type": "select",
+      "id": "media_type_1_mobile",
+      "label": "t:settings.type",
+      "options": [
+        {
+          "value": "image",
+          "label": "t:options.image"
+        },
+        {
+          "value": "video",
+          "label": "t:options.video"
+        }
+      ],
+      "default": "image",
+      "visible_if": "{{ section.settings.custom_mobile_media }}"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_1_mobile",
+      "label": "t:settings.image",
+      "visible_if": "{{ section.settings.custom_mobile_media and section.settings.media_type_1_mobile == 'image' }}"
+    },
+    {
+      "type": "video",
+      "id": "video_1_mobile",
+      "label": "t:settings.video",
+      "visible_if": "{{ section.settings.custom_mobile_media and section.settings.media_type_1_mobile == 'video' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.mobile_media_2",
+      "visible_if": "{{ section.settings.custom_mobile_media }}"
+    },
+    {
+      "type": "select",
+      "id": "media_type_2_mobile",
+      "label": "t:settings.type",
+      "options": [
+        {
+          "value": "image",
+          "label": "t:options.image"
+        },
+        {
+          "value": "video",
+          "label": "t:options.video"
+        }
+      ],
+      "default": "image",
+      "visible_if": "{{ section.settings.custom_mobile_media }}"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_2_mobile",
+      "label": "t:settings.image",
+      "visible_if": "{{ section.settings.custom_mobile_media and section.settings.media_type_2_mobile == 'image' }}"
+    },
+    {
+      "type": "video",
+      "id": "video_2_mobile",
+      "label": "t:settings.video",
+      "visible_if": "{{ section.settings.custom_mobile_media and section.settings.media_type_2_mobile == 'video' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.section_link"
+    },
+    {
+      "type": "url",
+      "id": "link",
+      "label": "t:settings.link"
+    },
+    {
+      "type": "checkbox",
+      "id": "open_in_new_tab",
+      "label": "t:settings.open_new_tab",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "t:content.layout"
+    },
+    {
+      "type": "select",
+      "id": "content_direction",
+      "label": "t:settings.direction",
+      "options": [
+        {
+          "value": "column",
+          "label": "t:options.vertical"
+        },
+        {
+          "value": "row",
+          "label": "t:options.horizontal"
+        }
+      ],
+      "default": "column"
+    },
+    {
+      "type": "checkbox",
+      "id": "vertical_on_mobile",
+      "label": "t:settings.vertical_on_mobile",
+      "default": true,
+      "visible_if": "{{ section.settings.content_direction == 'row' }}"
+    },
+    {
+      "type": "select",
+      "id": "horizontal_alignment",
+      "label": "t:settings.alignment",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "t:options.left"
+        },
+        {
+          "value": "center",
+          "label": "t:options.center"
+        },
+        {
+          "value": "flex-end",
+          "label": "t:options.right"
+        },
+        {
+          "value": "space-between",
+          "label": "t:options.space_between"
+        }
+      ],
+      "default": "flex-start",
+      "visible_if": "{{ section.settings.content_direction == 'row' }}"
+    },
+    {
+      "type": "select",
+      "id": "vertical_alignment",
+      "label": "t:settings.position",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "t:options.top"
+        },
+        {
+          "value": "center",
+          "label": "t:options.center"
+        },
+        {
+          "value": "flex-end",
+          "label": "t:options.bottom"
+        }
+      ],
+      "default": "center",
+      "visible_if": "{{ section.settings.content_direction == 'row' }}"
+    },
+    {
+      "type": "checkbox",
+      "id": "align_baseline",
+      "label": "t:settings.align_baseline",
+      "default": false,
+      "visible_if": "{{ section.settings.vertical_alignment == 'flex-end' }}"
+    },
+    {
+      "type": "select",
+      "id": "horizontal_alignment_flex_direction_column",
+      "label": "t:settings.alignment",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "t:options.left"
+        },
+        {
+          "value": "center",
+          "label": "t:options.center"
+        },
+        {
+          "value": "flex-end",
+          "label": "t:options.right"
+        }
+      ],
+      "default": "flex-start",
+      "visible_if": "{{ section.settings.content_direction != 'row' }}"
+    },
+    {
+      "type": "select",
+      "id": "vertical_alignment_flex_direction_column",
+      "label": "t:settings.position",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "t:options.top"
+        },
+        {
+          "value": "center",
+          "label": "t:options.center"
+        },
+        {
+          "value": "flex-end",
+          "label": "t:options.bottom"
+        },
+        {
+          "value": "space-between",
+          "label": "t:options.space_between"
+        }
+      ],
+      "default": "center",
+      "visible_if": "{{ section.settings.content_direction == 'column' }}"
+    },
+    {
+      "type": "range",
+      "id": "gap",
+      "label": "t:settings.gap",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        {
+          "value": "page-width",
+          "label": "t:options.page"
+        },
+        {
+          "value": "full-width",
+          "label": "t:options.full"
+        }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "select",
+      "id": "section_height",
+      "label": "t:settings.height",
+      "options": [
+        {
+          "value": "auto",
+          "label": "t:options.auto"
+        },
+        {
+          "value": "small",
+          "label": "t:options.small"
+        },
+        {
+          "value": "medium",
+          "label": "t:options.medium"
+        },
+        {
+          "value": "large",
+          "label": "t:options.large"
+        },
+        {
+          "value": "full-screen",
+          "label": "t:options.full_screen"
+        },
+        {
+          "value": "custom",
+          "label": "t:options.custom"
+        }
+      ],
+      "default": "medium"
+    },
+    {
+      "type": "range",
+      "id": "section_height_custom",
+      "label": "t:settings.custom_height",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "default": 50,
+      "unit": "%",
+      "visible_if": "{{ section.settings.section_height == 'custom' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.appearance"
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "checkbox",
+      "id": "toggle_overlay",
+      "label": "t:settings.media_overlay"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "t:settings.overlay_color",
+      "alpha": true,
+      "default": "#00000026",
+      "visible_if": "{{ section.settings.toggle_overlay }}"
+    },
+    {
+      "type": "select",
+      "id": "overlay_style",
+      "label": "t:settings.overlay_style",
+      "options": [
+        {
+          "value": "solid",
+          "label": "t:options.solid"
+        },
+        {
+          "value": "gradient",
+          "label": "t:options.gradient"
+        }
+      ],
+      "default": "solid",
+      "visible_if": "{{ section.settings.toggle_overlay }}"
+    },
+    {
+      "type": "select",
+      "id": "gradient_direction",
+      "label": "t:settings.gradient_direction",
+      "options": [
+        {
+          "value": "to top",
+          "label": "t:options.up"
+        },
+        {
+          "value": "to bottom",
+          "label": "t:options.down"
+        }
+      ],
+      "default": "to top",
+      "visible_if": "{{ section.settings.toggle_overlay and section.settings.overlay_style == 'gradient' }}"
+    },
+    {
+      "type": "checkbox",
+      "id": "blurred_reflection",
+      "label": "t:settings.blurred_reflection",
+      "default": false,
+      "info": "t:info.applies_on_image_only",
+      "visible_if": "{{ section.settings.media_type_1 != 'video' or section.settings.media_type_2 != 'video' or section.settings.media_type_1_mobile != 'video' or section.settings.media_type_2_mobile != 'video' }}"
+    },
+    {
+      "type": "range",
+      "id": "reflection_opacity",
+      "label": "t:settings.reflection_opacity",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "%",
+      "default": 75,
+      "visible_if": "{{ section.settings.blurred_reflection and section.settings.media_type_1 != 'video' or section.settings.media_type_2 != 'video' }}"
+    },
+    {
+      "type": "header",
+      "content": "t:content.padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:names.hero",
+      "category": "t:categories.banners",
+      "blocks": {
+        "text_1": {
+          "type": "text",
+          "settings": {
+            "text": "t:html_defaults.new_arrivals_h2",
+            "type_preset": "h1",
+            "max_width": "narrow"
+          }
+        },
+        "text_2": {
+          "type": "text",
+          "settings": {
+            "text": "t:html_defaults.made_with_care",
+            "max_width": "narrow",
+            "padding-block-end": 32
+          }
+        },
+        "button": {
+          "type": "button",
+          "name": "t:names.button",
+          "settings": {
+            "label": "t:text_defaults.shop_now_button_label",
+            "link": "shopify://collections/all"
+          }
+        }
+      },
+      "block_order": ["text_1", "text_2", "button"],
+      "settings": {
+        "horizontal_alignment_flex_direction_column": "center",
+        "gap": 16,
+        "section_height": "large",
+        "color_scheme": "scheme-5",
+        "padding-block-start": 40,
+        "padding-block-end": 40,
+        "toggle_overlay": true,
+        "overlay_style": "gradient"
+      }
+    },
+    {
+      "name": "t:names.hero_marquee",
+      "category": "t:categories.banners",
+      "blocks": {
+        "spacer": {
+          "type": "spacer",
+          "settings": {
+            "size": "pixel",
+            "pixel_size": 24
+          }
+        },
+        "marquee": {
+          "type": "_marquee",
+          "blocks": {
+            "text": {
+              "type": "text",
+              "settings": {
+                "text": "t:html_defaults.explore_latest_products",
+                "type_preset": "h1"
+              }
+            }
+          },
+          "block_order": ["text"]
+        },
+        "button": {
+          "type": "button",
+          "settings": {
+            "label": "t:text_defaults.shop_now_button_label",
+            "link": "shopify://collections/all"
+          }
+        }
+      },
+      "block_order": ["spacer", "marquee", "button"],
+      "settings": {
+        "horizontal_alignment_flex_direction_column": "center",
+        "vertical_alignment_flex_direction_column": "space-between",
+        "gap": 32,
+        "section_height": "large",
+        "color_scheme": "scheme-5",
+        "padding-block-start": 0,
+        "padding-block-end": 40,
+        "toggle_overlay": true,
+        "overlay_style": "gradient"
+      }
+    },
+    {
+      "name": "t:names.hero_bottom_aligned",
+      "category": "t:categories.banners",
+      "blocks": {
+        "group_main": {
+          "type": "group",
+          "name": "t:names.group",
+          "settings": {
+            "content_direction": "row",
+            "vertical_on_mobile": true,
+            "horizontal_alignment": "flex-start",
+            "vertical_alignment": "flex-end",
+            "align_baseline": true,
+            "horizontal_alignment_flex_direction_column": "flex-start",
+            "vertical_alignment_flex_direction_column": "center",
+            "gap": 18,
+            "width": "fill",
+            "custom_width": 100,
+            "width_mobile": "fill",
+            "custom_width_mobile": 100,
+            "height": "fit",
+            "custom_height": 100,
+            "inherit_color_scheme": true,
+            "color_scheme": "",
+            "background_media": "none",
+            "video_position": "cover",
+            "background_image_position": "cover",
+            "border": "none",
+            "border_width": 1,
+            "border_opacity": 100,
+            "border_radius": 0,
+            "padding-block-start": 0,
+            "padding-block-end": 0,
+            "padding-inline-start": 0,
+            "padding-inline-end": 0
+          },
+          "blocks": {
+            "content_group": {
+              "type": "group",
+              "name": "t:names.group",
+              "settings": {
+                "content_direction": "column",
+                "vertical_on_mobile": true,
+                "horizontal_alignment": "flex-start",
+                "vertical_alignment": "center",
+                "align_baseline": false,
+                "horizontal_alignment_flex_direction_column": "flex-start",
+                "vertical_alignment_flex_direction_column": "center",
+                "gap": 6,
+                "width": "custom",
+                "custom_width": 100,
+                "width_mobile": "fill",
+                "custom_width_mobile": 100,
+                "height": "fit",
+                "custom_height": 100,
+                "inherit_color_scheme": true,
+                "color_scheme": "",
+                "background_media": "none",
+                "video_position": "cover",
+                "background_image_position": "cover",
+                "border": "none",
+                "border_width": 1,
+                "border_opacity": 100,
+                "border_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              },
+              "blocks": {
+                "text_intro": {
+                  "type": "text",
+                  "name": "t:names.text",
+                  "settings": {
+                    "text": "t:html_defaults.introducing_p",
+                    "width": "100%",
+                    "max_width": "normal",
+                    "alignment": "left",
+                    "type_preset": "h6",
+                    "font": "var(--font-accent--family)",
+                    "font_size": "1rem",
+                    "line_height": "normal",
+                    "letter_spacing": "normal",
+                    "case": "none",
+                    "wrap": "pretty",
+                    "color": "",
+                    "background": false,
+                    "background_color": "#00000026",
+                    "corner_radius": 0,
+                    "padding-block-start": 0,
+                    "padding-block-end": 0,
+                    "padding-inline-start": 0,
+                    "padding-inline-end": 0
+                  }
+                },
+                "text_main": {
+                  "type": "text",
+                  "name": "t:names.heading",
+                  "settings": {
+                    "text": "t:html_defaults.new_arrivals_h2",
+                    "width": "100%",
+                    "max_width": "normal",
+                    "alignment": "left",
+                    "type_preset": "h2",
+                    "font": "var(--font-primary--family)",
+                    "font_size": "",
+                    "line_height": "normal",
+                    "letter_spacing": "normal",
+                    "case": "none",
+                    "wrap": "pretty",
+                    "color": "",
+                    "background": false,
+                    "background_color": "#00000026",
+                    "corner_radius": 0,
+                    "padding-block-start": 0,
+                    "padding-block-end": 0,
+                    "padding-inline-start": 0,
+                    "padding-inline-end": 0
+                  }
+                }
+              },
+              "block_order": ["text_intro", "text_main"]
+            },
+            "text_description": {
+              "type": "text",
+              "name": "t:names.text",
+              "settings": {
+                "text": "t:html_defaults.make_things_better_extended",
+                "width": "fit-content",
+                "max_width": "none",
+                "alignment": "left",
+                "type_preset": "rte",
+                "font": "var(--font-primary--family)",
+                "font_size": "",
+                "line_height": "normal",
+                "letter_spacing": "normal",
+                "case": "none",
+                "wrap": "pretty",
+                "color": "",
+                "background": false,
+                "background_color": "#00000026",
+                "corner_radius": 0,
+                "padding-block-start": 0,
+                "padding-block-end": 0,
+                "padding-inline-start": 0,
+                "padding-inline-end": 0
+              }
+            }
+          },
+          "block_order": ["content_group", "text_description"]
+        }
+      },
+      "block_order": ["group_main"],
+      "settings": {
+        "media_type_1": "image",
+        "horizontal_alignment_flex_direction_column": "center",
+        "vertical_alignment_flex_direction_column": "flex-end",
+        "gap": 16,
+        "section_height": "large",
+        "color_scheme": "scheme-5",
+        "padding-block-start": 40,
+        "padding-block-end": 40,
+        "toggle_overlay": true,
+        "overlay_style": "gradient",
+        "gradient_direction": "to top"
+      }
+    }
+  ]
+}
+{% endschema %}
+

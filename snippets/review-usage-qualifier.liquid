@@ -1,0 +1,48 @@
+{%- doc -%}
+  Composes usage line from buyer/recipient dropdown answers (§5.1 lock).
+  @param {string} how_often - Daily | Weekly | Occasionally
+  @param {string} where_it_lives - Pocket | Bag | Home
+  @param {string} dugout_experience - Dugout veteran | Dugout rookie
+{%- enddoc -%}
+
+{%- liquid
+  assign how_often = how_often | default: '' | strip
+  assign where_it_lives = where_it_lives | default: '' | strip
+  assign dugout_experience = dugout_experience | default: '' | strip
+
+  assign freq_label = ''
+  case how_often
+    when 'Daily'
+      assign freq_label = 'Daily user'
+    when 'Weekly'
+      assign freq_label = 'Weekly user'
+    when 'Occasionally'
+      assign freq_label = 'Occasional user'
+  endcase
+
+  assign location_label = ''
+  case where_it_lives
+    when 'Pocket'
+      assign location_label = 'Pocket carry'
+    when 'Bag'
+      assign location_label = 'Bag carry'
+    when 'Home'
+      assign location_label = 'Home use'
+  endcase
+
+  assign parts = freq_label | append: '|||' | append: location_label | append: '|||' | append: dugout_experience
+  assign parts_arr = parts | split: '|||'
+  assign qualifier = ''
+  for part in parts_arr
+    if part != blank
+      if qualifier != blank
+        assign qualifier = qualifier | append: ' · '
+      endif
+      assign qualifier = qualifier | append: part
+    endif
+  endfor
+-%}
+
+{%- if qualifier != blank -%}
+  <p class="reviews-card__usage">{{ qualifier }}</p>
+{%- endif -%}

@@ -1,0 +1,323 @@
+{% comment %}
+  ============================================================================
+  BUNDLE COLLECTION — "Gifts & Bundles" entry point
+  ============================================================================
+  Picture-forward grid of bundle products. Each card is a single click target
+  that routes to the bundle product page (product.url).
+
+  The 2+1 layout is achieved purely with flex-wrap + a 50%-width card, so the
+  grid is fully data-driven: with 3 products two sit on the top row and the
+  third centers below; with 2 products (e.g. when Home Kit is Draft and the
+  smart collection drops it) both sit on one row. No per-index conditionals,
+  so Draft gating needs zero template changes.
+
+  Data in: collection.products (auto from the smart collection rule
+  Product type = Bundle). Data out: navigation to each bundle product page.
+  ============================================================================
+{% endcomment %}
+
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="bundle-collection section section--page-width color-{{ section.settings.color_scheme }} spacing-style"
+  style="{% render 'spacing-style', settings: section.settings %}"
+  {{ section.shopify_attributes }}
+>
+  <div class="bundle-collection__inner">
+    {% if section.settings.heading != blank or section.settings.subheading != blank %}
+      <div class="bundle-collection__header">
+        {% if section.settings.heading != blank %}
+          <h1 class="bundle-collection__title">{{ section.settings.heading | escape }}</h1>
+        {% endif %}
+        {% if section.settings.subheading != blank %}
+          <p class="bundle-collection__subhead">{{ section.settings.subheading | escape }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="bundle-collection__grid">
+      {% for product in collection.products %}
+        {% liquid
+          # A bundle is buildable only if every constituent piece has at least
+          # one in-stock color. The shared snippet reads component inventory and
+          # outputs "available" / "unavailable" — the same rule the bundle page
+          # uses, so the card and the PDP never disagree.
+          capture bundle_state
+            render 'bundle-availability', product: product
+          endcapture
+          assign bundle_state = bundle_state | strip
+
+          if bundle_state == 'available'
+            assign is_available = true
+            assign card_tag = 'a'
+          else
+            assign is_available = false
+            assign card_tag = 'div'
+          endif
+        %}
+        <{{ card_tag }}
+          class="bundle-collection__card{% unless is_available %} bundle-collection__card--soldout{% endunless %}"
+          {% if is_available %}href="{{ product.url }}"{% endif %}
+        >
+          <div class="bundle-collection__image-wrap">
+            {% if product.featured_image %}
+              {{
+                product.featured_image
+                | image_url: width: 800
+                | image_tag:
+                  loading: 'lazy',
+                  alt: product.title,
+                  class: 'bundle-collection__image',
+                  widths: '300, 400, 600, 800'
+              }}
+            {% else %}
+              {{ 'image' | placeholder_svg_tag: 'bundle-collection__image placeholder' }}
+            {% endif %}
+          </div>
+          <div class="bundle-collection__footer">
+            <span class="bundle-collection__name">{{ product.title | escape }}</span>
+            <span class="bundle-collection__price">{{ product.price | money }}</span>
+          </div>
+          {% unless is_available %}
+            <div class="bundle-collection__notify">
+              <span class="bundle-collection__notify-label">
+                {{ 'bundles.currently_unavailable' | t: default: 'Currently unavailable' }}
+              </span>
+              <span class="bundle-collection__notify-button">
+                {{ 'bundles.get_notified' | t: default: 'Get Notified' }}
+              </span>
+            </div>
+          {% endunless %}
+        </{{ card_tag }}>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% stylesheet %}
+  /* Brand tokens mirrored from sections/bundle-page.liquid for visual
+     consistency with the bundle PDPs. Scoped to .bundle-collection. */
+  .bundle-collection {
+    --bundle-bg: rgb(255 255 255 / 1);
+    --bundle-text-primary: oklch(18.6% 0.006 95);
+    --bundle-text-secondary: oklch(41.5% 0.005 95);
+    --bundle-border-tertiary: oklch(78% 0.002 95);
+    --bundle-radius: 0.5rem;
+    --bundle-card-gap: 1rem; /* 16px */
+  }
+
+  /* Content container — capped at 1000px and centered.
+     padding-top clears the (sticky/transparent) header; applied here rather
+     than on the .section element because the theme controls that element's
+     padding via .spacing-style / --section-top-offset. */
+  .bundle-collection__inner {
+    width: 100%;
+    max-width: 1000px;
+    margin-inline: auto;
+    padding-block-start: 78px;
+  }
+
+  /* ---- Header — centered title + subhead ---- */
+  .bundle-collection__header {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+
+  /* Title mirrors sections/bundle-page.liquid .bundle-page__title */
+  .bundle-collection__title {
+    font-size: 2.5rem; /* 40px */
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--bundle-text-primary);
+    margin: 0;
+  }
+
+  .bundle-collection__subhead {
+    font-size: 1.0625rem; /* 17px */
+    color: var(--bundle-text-secondary);
+    margin: 0.5rem 0 0;
+  }
+
+  @media screen and (max-width: 749px) {
+    .bundle-collection__title {
+      font-size: 2.5rem; /* 40px — match desktop, stay above bundle names */
+    }
+  }
+
+  /* ---- Grid — 2+1 via flex wrap; odd card centers on the last row ---- */
+  .bundle-collection__grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--bundle-card-gap);
+  }
+
+  /* ---- Card — entire card is the click target ---- */
+  .bundle-collection__card {
+    position: relative;
+    flex: 0 0 calc(50% - (var(--bundle-card-gap) / 2));
+    display: flex;
+    flex-direction: column;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: 0.8rem;
+    overflow: hidden;
+    background: var(--bundle-bg);
+    text-decoration: none;
+    transition: border-color 140ms ease, transform 140ms ease;
+  }
+
+  .bundle-collection__card:hover {
+    border-color: var(--bundle-text-secondary);
+  }
+
+  /* ---- Sold-out card — non-clickable, dimmed image, notify CTA ---- */
+  .bundle-collection__card--soldout {
+    cursor: default;
+  }
+
+  .bundle-collection__card--soldout:hover {
+    border-color: var(--bundle-border-tertiary);
+  }
+
+  /* Dim the product photo to signal the unavailable state */
+  .bundle-collection__card--soldout .bundle-collection__image {
+    opacity: 0.5;
+  }
+
+  /* Image area — 1:1 square frame, contained product photo */
+  .bundle-collection__image-wrap {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .bundle-collection__image {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  /* Footer — centered name + price */
+  .bundle-collection__footer {
+    padding: 12px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .bundle-collection__name {
+    font-size: 1.875rem; /* 30px — match bundle page title */
+    font-weight: 600;
+    color: var(--bundle-text-primary);
+  }
+
+  .bundle-collection__price {
+    font-size: 1.6875rem; /* 27px — match bundle page price */
+    color: var(--bundle-text-secondary);
+  }
+
+  /* ---- Notify CTA — overlaid near the top of unavailable cards ---- */
+  .bundle-collection__notify {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 12px 16px;
+  }
+
+  .bundle-collection__notify-label {
+    font-size: 0.8125rem; /* 13px */
+    color: var(--bundle-text-secondary);
+  }
+
+  /* Mirrors the bundle PDP primary button (.button--primary) */
+  .bundle-collection__notify-button {
+    display: inline-block;
+    background: var(--bundle-text-primary);
+    color: var(--bundle-bg);
+    font-size: 0.9375rem; /* 15px */
+    font-weight: 600;
+    padding: 0.625rem 1.5rem;
+    border-radius: 999px;
+    line-height: 1;
+  }
+
+  /* ---- Mobile — single column stack ---- */
+  @media screen and (max-width: 749px) {
+    .bundle-collection__inner {
+      padding-block-start: 10px;
+    }
+
+    .bundle-collection__card {
+      flex: 0 0 100%;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "t:names.bundle_collection",
+  "tag": "section",
+  "class": "bundle-collection-section",
+  "disabled_on": {
+    "groups": ["header", "footer"]
+  },
+  "settings": [
+    {
+      "type": "header",
+      "content": "t:settings.heading"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "t:settings.heading",
+      "default": "Gifts & Bundles"
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "t:settings.subheading",
+      "default": "Curated bundles for yourself or someone else."
+    },
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 48
+    }
+  ],
+  "presets": [
+    {
+      "name": "t:names.bundle_collection"
+    }
+  ]
+}
+{% endschema %}

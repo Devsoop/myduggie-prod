@@ -1,0 +1,12 @@
+{%- doc -%}
+  Review tag pill with optional SVG icon (Brian post-M1 #2).
+  @param {string} label - Pill text
+  @param {string} [icon] - verified-buyer | gift-recipient | gift-gifter | blank for Sample
+{%- enddoc -%}
+
+<span class="reviews-card__pill">
+  {%- if icon != blank -%}
+    {% render 'review-pill-icon', icon: icon %}
+  {%- endif -%}
+  <span class="reviews-card__pill-label">{{ label }}</span>
+</span>

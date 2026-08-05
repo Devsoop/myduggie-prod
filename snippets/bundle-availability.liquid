@@ -1,0 +1,62 @@
+{% doc %}
+  Decides whether a bundle can currently be built from its components.
+
+  A bundle is "available" only when every constituent piece has at least one
+  in-stock color; it is "unavailable" as soon as any piece is sold out in every
+  color. Read entirely from component inventory — there is no manual flag.
+
+  In-stock rule (used everywhere bundle availability is evaluated):
+  a variant counts as in stock when it is available AND not (inventory is
+  tracked and quantity <= 0). This treats a "continue selling when out of
+  stock" variant at 0 inventory as sold out.
+
+  Outputs the literal string "available" or "unavailable" so callers can
+  capture and compare it.
+
+  @param {product} product - The bundle product
+
+  @example
+  {% capture bundle_state %}{% render 'bundle-availability', product: product %}{% endcapture %}
+  {% assign bundle_state = bundle_state | strip %}
+{% enddoc %}
+
+{%- liquid
+  assign items = product.metafields.custom.constituent_items.value
+  if items == blank
+    assign items = product.metafields.custom.constituent_items
+  endif
+
+  assign state = 'available'
+
+  if items != blank
+    for item in items
+      assign piece = item
+      if item.type == 'product_reference'
+        assign piece = item.value
+      endif
+
+      assign piece_in_stock = false
+      for variant in piece.variants
+        assign variant_ok = variant.available
+        if variant.inventory_management != blank and variant.inventory_quantity <= 0
+          assign variant_ok = false
+        endif
+        if variant_ok
+          assign piece_in_stock = true
+          break
+        endif
+      endfor
+
+      unless piece_in_stock
+        assign state = 'unavailable'
+        break
+      endunless
+    endfor
+  else
+    unless product.available
+      assign state = 'unavailable'
+    endunless
+  endif
+
+  echo state
+-%}

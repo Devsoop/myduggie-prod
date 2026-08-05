@@ -1,0 +1,9 @@
+{
+  "sections": {
+    "main": {
+      "type": "gift-checkout",
+      "settings": {}
+    }
+  },
+  "order": ["main"]
+}
