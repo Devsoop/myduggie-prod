@@ -801,7 +801,6 @@
           window.reviewsLightboxReload();
         }
       } catch (err) {
-        console.error('[reviews] cursor fetch failed:', err);
         if (!reset) nextCursor = null;
       } finally {
         loading = false;

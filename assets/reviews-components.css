@@ -705,20 +705,6 @@ button.reviews-card__own-swatch:focus-visible {
   color: var(--reviews-text-primary);
 }
 
-.reviews-test-page__title {
-  font-size: 22px;
-  font-weight: 500;
-  margin: 0 0 8px;
-  color: var(--reviews-text-primary);
-}
-
-.reviews-test-page__intro {
-  font-size: 14px;
-  color: var(--reviews-text-secondary);
-  margin: 0 0 24px;
-  max-width: 52ch;
-}
-
 /* —— §5.5 / §5.5b status card (Thank-You + link inactive) —— */
 
 .reviews-surface--status {
