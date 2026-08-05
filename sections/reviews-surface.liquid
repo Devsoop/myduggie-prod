@@ -479,10 +479,9 @@
           echo '" hidden></ul></li>'
         endcapture
         assign owns_row = owns_row | strip
-        # Price-descending render order (hero product first, e.g. The Lil' Duggie
-        # before the keychain) — same catalog-driven rule as the card's own Owns
-        # row (see review-card-owns-icons.liquid, Brian punch list #1), so this
-        # never hardcodes a product title and new SKUs slot in by price alone.
+        # Price-descending render order (hero product first) — same catalog-driven
+        # rule as the card Owns row (review-card-owns-icons.liquid), so this never
+        # hardcodes a product title and new SKUs slot in by price alone.
         assign owns_price = 0
         if owns_catalog_product != blank and owns_catalog_product != empty
           assign owns_price = owns_catalog_product.price | default: 0

@@ -1,19 +1,15 @@
-/* None Better Reviews — Milestone 1 */
+/* None Better Reviews */
 
 .reviews-surface {
   --reviews-bg-page: #ffffff;
-  /* Post-M1 #1: cool grey pill surface (was warm #f5f2ed) */
   --reviews-bg-pill: #f4f4f2;
   --reviews-text-primary: #1f1f1e;
   --reviews-text-secondary: #5f5e5a;
   --reviews-text-tertiary: #888780;
   --reviews-border-tertiary: rgba(0, 0, 0, 0.12);
   --reviews-border-secondary: rgba(0, 0, 0, 0.3);
-  /* Brian Jun 23: uniform container frame (cards + form outer box) */
   --reviews-border-container: rgba(0, 0, 0, 0.5);
-  /* Brian Jun 23: inner section hairlines after heavier outer frame */
   --reviews-border-divider: rgba(0, 0, 0, 0.25);
-  /* Distribution bars: fill only (no track — Brian M2 pivot; not a progress bar) */
   --reviews-bar-fill: #b0b0ad;
   /* Validation: muted clay red, same restrained register as the success green
      (#2e8b57) — deliberately not an alarm red. One place to tune. */
@@ -43,7 +39,6 @@
   border-radius: var(--reviews-radius-card);
   padding: 28px 32px;
   margin-bottom: 24px;
-  /* Post-M1 #3: match card max-width from M1 revision #7 */
   max-width: var(--reviews-content-max-width);
   margin-left: auto;
   margin-right: auto;
@@ -58,7 +53,6 @@
   width: 100%;
 }
 
-/* M1 revision #2 + post-M1 #4: center summary as one tight stack */
 .reviews-aggregate__summary {
   text-align: center;
   display: flex;
@@ -119,7 +113,7 @@
   white-space: nowrap;
 }
 
-/* Bar chart: fill segments only (Brian M2 — no visible track). .bar-cell holds grid column 2 when count is 0. */
+/* Bar chart: fill segments only (no visible track). .bar-cell holds grid column 2 when count is 0. */
 .reviews-aggregate__bar-cell {
   min-height: 8px;
   min-width: 0;
@@ -345,7 +339,6 @@
 
 /* —— Buyer review card —— */
 
-/* M1 revision #7: cap card width on desktop for readable line length */
 .reviews-cards {
   display: flex;
   flex-direction: column;
@@ -692,7 +685,6 @@ button.reviews-card__own-swatch:focus-visible {
   margin-top: 0;
 }
 
-/* M1 revision #5: wireframe-weight typography (was 10px / 13px per §4.6) */
 .reviews-card__prompt {
   font-size: 13px;
   color: var(--reviews-text-tertiary);

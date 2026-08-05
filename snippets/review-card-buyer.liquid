@@ -88,7 +88,6 @@
   {% render 'review-card-photos', photos: photos, photo_limit: photo_limit, gallery_id: review_id %}
 
   <div class="reviews-card__prose">
-    {%- comment -%} M1 revision #6: hide unanswered optional prompts (label + block) when body is blank {%- endcomment -%}
     {%- if prose_1_body != blank -%}
       <div class="reviews-card__prose-item">
         <p class="reviews-card__prompt">{{ prose_1_label | escape }}</p>
