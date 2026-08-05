@@ -1,0 +1,36 @@
+{%- doc -%}
+  FTC Disclosure — lead, markers, collapsible body. Closing renders separately on reviews page.
+  @param {boolean} [include_closing] - Show closing line (standalone FTC section)
+{%- enddoc -%}
+
+<div class="reviews-ftc">
+  <p class="reviews-ftc__lead">From the people who have one. For the people thinking about one.</p>
+
+  <p class="reviews-ftc__markers">
+    <span class="reviews-ftc__marker">
+      {% render 'reviews-ftc-marker-icon', icon: 'invitation' %}
+      <span class="reviews-ftc__marker-label">Invitation only</span>
+    </span>
+    <span class="reviews-ftc__marker-sep" aria-hidden="true">·</span>
+    <span class="reviews-ftc__marker">
+      {% render 'reviews-ftc-marker-icon', icon: 'verbatim' %}
+      <span class="reviews-ftc__marker-label">Published verbatim</span>
+    </span>
+    <span class="reviews-ftc__marker-sep" aria-hidden="true">·</span>
+    <span class="reviews-ftc__marker">
+      {% render 'reviews-ftc-marker-icon', icon: 'sample' %}
+      <span class="reviews-ftc__marker-label">Free units tagged Sample</span>
+    </span>
+  </p>
+
+  <details class="reviews-ftc__how">
+    <summary class="reviews-ftc__how-summary">How this works</summary>
+    <p class="reviews-ftc__body">
+      Every review here is from someone who bought one, was sent one as a gift, or gave one as a gift. We email and ask. If they write, we publish — first name and last initial, exactly what they wrote. Reviews from people we sent a free unit to are tagged "Sample."
+    </p>
+  </details>
+
+  {%- if include_closing -%}
+    <p class="reviews-ftc__closing">What they loved. What they'd change. Everything in between.</p>
+  {%- endif -%}
+</div>

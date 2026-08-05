@@ -1,0 +1,77 @@
+{{ 'reviews-components.css' | asset_url | stylesheet_tag }}
+
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="section section--{{ section.settings.section_width }} color-{{ section.settings.color_scheme }} spacing-style reviews-surface reviews-surface--status section-{{ section.id }}"
+  style="{% render 'spacing-style', settings: section.settings %}"
+>
+  <div class="reviews-status-page">
+    <div class="reviews-status-card reviews-status-card--thank-you">
+      <div class="reviews-status-card__icon reviews-status-card__icon--success" aria-hidden="true">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+      </div>
+      <h1 class="reviews-status-card__heading">Thank you.</h1>
+      <p class="reviews-status-card__body">
+        Somewhere, someone is about to read this and be glad you wrote it.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Review thank you",
+  "tag": "section",
+  "class": "reviews-section-thank-you",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        { "value": "page-width", "label": "t:options.page" },
+        { "value": "full-width", "label": "t:options.full" }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    }
+  ],
+  "presets": [{ "name": "Review thank you" }]
+}
+{% endschema %}

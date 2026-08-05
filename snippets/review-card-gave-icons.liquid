@@ -1,0 +1,75 @@
+{%- doc -%}
+  Gave row swatch images from `gave` JSON (§5.8, M6).
+  @param {array} gave - review_entry.gave.value
+  @param {array} [ownership] - fallback handle source for gifter gave items
+  @param {number} [icon_limit] - max swatches rendered (default 12)
+{%- enddoc -%}
+
+{%- liquid
+  assign icon_limit = icon_limit | default: 12 | plus: 0
+  assign icons_shown = 0
+-%}
+
+{%- if gave != blank -%}
+  {%- for item in gave -%}
+    {%- if icons_shown >= icon_limit -%}
+      {%- break -%}
+    {%- endif -%}
+
+    {%- liquid
+      assign image_url = item.swatch_file_url | default: item.image_url
+      if image_url == blank
+        continue
+      endif
+
+      assign sep = '?'
+      if image_url contains '?'
+        assign sep = '&'
+      endif
+      assign image_src = image_url | append: sep | append: 'width=120'
+
+      assign tooltip_label = item.product_title | default: item.title
+      assign variant_title = item.variant_title | strip
+      if variant_title != blank and variant_title != 'Default Title'
+        assign tooltip_label = tooltip_label | append: ' · ' | append: variant_title
+      endif
+      assign finish_key = variant_title | handleize
+      assign gave_handle = item.product_handle | default: ''
+      if gave_handle == blank and ownership != blank
+        for group in ownership
+          if group.swatches != blank
+            for sw in group.swatches
+              if sw.variant_title == item.variant_title and group.product_handle != blank
+                assign gave_handle = group.product_handle
+                break
+              endif
+            endfor
+          endif
+          if gave_handle != blank
+            break
+          endif
+        endfor
+      endif
+      if gave_handle == blank and item.product_title != blank
+        for catalog_product in collections.all.products
+          if catalog_product.title == item.product_title
+            assign gave_handle = catalog_product.handle
+            break
+          endif
+        endfor
+        if gave_handle == blank
+          assign gave_handle = item.product_title | handleize
+        endif
+      endif
+    -%}
+
+    {% render 'review-card-own-swatch',
+      image_src: image_src,
+      tooltip_label: tooltip_label,
+      product_handle: gave_handle,
+      finish_key: finish_key,
+      filter_trigger: 'variant'
+    %}
+    {%- assign icons_shown = icons_shown | plus: 1 -%}
+  {%- endfor -%}
+{%- endif -%}

@@ -3,12 +3,14 @@
   @param {string} how_often - Daily | Weekly | Occasionally
   @param {string} where_it_lives - Pocket | Bag | Home
   @param {string} dugout_experience - Dugout veteran | Dugout rookie
+  @param {boolean} [filterable] - When true, each tag is a filter trigger (M8)
 {%- enddoc -%}
 
 {%- liquid
   assign how_often = how_often | default: '' | strip
   assign where_it_lives = where_it_lives | default: '' | strip
   assign dugout_experience = dugout_experience | default: '' | strip
+  assign filterable = filterable | default: false
 
   assign freq_label = ''
   case how_often
@@ -29,20 +31,53 @@
     when 'Home'
       assign location_label = 'Home use'
   endcase
-
-  assign parts = freq_label | append: '|||' | append: location_label | append: '|||' | append: dugout_experience
-  assign parts_arr = parts | split: '|||'
-  assign qualifier = ''
-  for part in parts_arr
-    if part != blank
-      if qualifier != blank
-        assign qualifier = qualifier | append: ' · '
-      endif
-      assign qualifier = qualifier | append: part
-    endif
-  endfor
 -%}
 
-{%- if qualifier != blank -%}
-  <p class="reviews-card__usage">{{ qualifier }}</p>
+{%- if freq_label != blank or location_label != blank or dugout_experience != blank -%}
+  <div class="reviews-card__usage{% if filterable %} reviews-card__usage--filterable{% endif %}">
+    {%- if freq_label != blank -%}
+      {%- if filterable and how_often != blank -%}
+        <button
+          type="button"
+          class="reviews-card__pill reviews-card__filter-trigger"
+          data-reviews-filter-trigger="frequency"
+          data-filter-value="{{ how_often | escape }}"
+          data-filter-mode="add"
+          aria-pressed="false"
+        >{{ freq_label }}</button>
+      {%- else -%}
+        <span class="reviews-card__usage-part">{{ freq_label }}</span>
+      {%- endif -%}
+    {%- endif -%}
+
+    {%- if location_label != blank -%}
+      {%- if filterable and where_it_lives != blank -%}
+        <button
+          type="button"
+          class="reviews-card__pill reviews-card__filter-trigger"
+          data-reviews-filter-trigger="carry"
+          data-filter-value="{{ where_it_lives | escape }}"
+          data-filter-mode="add"
+          aria-pressed="false"
+        >{{ location_label }}</button>
+      {%- else -%}
+        <span class="reviews-card__usage-part">{{ location_label }}</span>
+      {%- endif -%}
+    {%- endif -%}
+
+    {%- if dugout_experience != blank -%}
+      {%- if filterable -%}
+        <button
+          type="button"
+          class="reviews-card__pill reviews-card__filter-trigger"
+          data-reviews-filter-trigger="experience"
+          data-filter-value="{{ dugout_experience | escape }}"
+          data-filter-mode="add"
+          aria-pressed="false"
+        >{{ dugout_experience | escape }}</button>
+      {%- else -%}
+        <span class="reviews-card__usage-part">{{ dugout_experience | escape }}</span>
+      {%- endif -%}
+    {%- endif -%}
+  </div>
 {%- endif -%}

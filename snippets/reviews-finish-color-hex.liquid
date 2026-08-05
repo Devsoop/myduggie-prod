@@ -1,0 +1,152 @@
+{%- doc -%}
+  CSS color for a finish name from shopify--color-pattern metaobjects.
+
+  Lookup order:
+    1. shop.metaobjects shopify--color-pattern (match label) — shared finish system, all products
+    2. Optional catalog_handles_pipe — pipe-delimited product handles from review ownership (no hardcoded catalog)
+    3. Optional catalog_product — current PDP fallback
+    4. Fallback #1F1F1E
+
+  @param {string} finish_label - e.g. "Burnt Orange"
+  @param {string} [catalog_handles_pipe] - pipe-delimited product handles from scoped review ownership
+  @param {object} [catalog_product] - product on the current reviews page
+  @returns CSS color via echo (hex or rgb(...))
+{%- enddoc -%}
+
+{%- liquid
+  assign css_color = ''
+  assign finish_label_lc = finish_label | downcase | strip
+-%}
+
+{%- if finish_label_lc != blank -%}
+  {%- assign global_patterns = shop.metaobjects['shopify--color-pattern'].values -%}
+  {%- if global_patterns != blank -%}
+    {%- for cp in global_patterns -%}
+      {%- if css_color != blank -%}
+        {%- break -%}
+      {%- endif -%}
+      {%- assign cp_label = cp.label.value | default: cp.label | default: '' -%}
+      {%- assign cp_label_lc = cp_label | downcase | strip -%}
+      {%- if cp_label_lc == finish_label_lc -%}
+        {%- assign color_field = cp.color.value | default: cp.color -%}
+        {%- if color_field.rgb != blank -%}
+          {%- assign css_color = 'rgb(' | append: color_field.rgb | append: ')' -%}
+        {%- elsif color_field != blank -%}
+          {%- capture _color_raw -%}{{ color_field }}{%- endcapture -%}
+          {%- assign _color_raw = _color_raw | strip -%}
+          {%- if _color_raw != blank -%}
+            {%- assign css_color = _color_raw -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+
+  {%- if css_color == blank and catalog_handles_pipe != blank -%}
+    {%- assign handle_list = catalog_handles_pipe | split: '|' -%}
+    {%- for handle in handle_list -%}
+      {%- if css_color != blank -%}
+        {%- break -%}
+      {%- endif -%}
+      {%- if handle == blank -%}
+        {%- continue -%}
+      {%- endif -%}
+      {%- assign cat_product = all_products[handle] -%}
+      {%- if cat_product == empty -%}
+        {%- continue -%}
+      {%- endif -%}
+
+      {%- assign product_patterns = cat_product.metafields.shopify['color-pattern'].value -%}
+      {%- if product_patterns != blank -%}
+        {%- for color_pattern in product_patterns -%}
+          {%- assign pl = color_pattern.label.value | default: color_pattern.label | default: '' -%}
+          {%- assign pl_lc = pl | downcase | strip -%}
+          {%- if pl_lc == finish_label_lc -%}
+            {%- assign color_field = color_pattern.color.value | default: color_pattern.color -%}
+            {%- if color_field.rgb != blank -%}
+              {%- assign css_color = 'rgb(' | append: color_field.rgb | append: ')' -%}
+            {%- elsif color_field != blank -%}
+              {%- capture _color_raw -%}{{ color_field }}{%- endcapture -%}
+              {%- assign _color_raw = _color_raw | strip -%}
+              {%- if _color_raw != blank -%}
+                {%- assign css_color = _color_raw -%}
+              {%- endif -%}
+            {%- endif -%}
+            {%- break -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endif -%}
+
+      {%- if css_color == blank -%}
+        {%- for product_option in cat_product.options_with_values -%}
+          {%- assign option_name_lc = product_option.name | downcase -%}
+          {%- unless option_name_lc == 'color' or option_name_lc == 'colour' or option_name_lc == 'colors' -%}
+            {%- continue -%}
+          {%- endunless -%}
+          {%- for product_option_value in product_option.values -%}
+            {%- assign ov_lc = product_option_value.name | downcase | strip -%}
+            {%- if ov_lc == finish_label_lc -%}
+              {%- if product_option_value.swatch.color != blank -%}
+                {%- assign css_color = 'rgb(' | append: product_option_value.swatch.color.rgb | append: ')' -%}
+              {%- endif -%}
+              {%- break -%}
+            {%- endif -%}
+          {%- endfor -%}
+        {%- endfor -%}
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endif -%}
+
+  {%- if css_color == blank and catalog_product != blank and catalog_product != empty -%}
+    {%- assign cat_product = catalog_product -%}
+    {%- assign product_patterns = cat_product.metafields.shopify['color-pattern'].value -%}
+    {%- if product_patterns != blank -%}
+      {%- for color_pattern in product_patterns -%}
+        {%- assign pl = color_pattern.label.value | default: color_pattern.label | default: '' -%}
+        {%- assign pl_lc = pl | downcase | strip -%}
+        {%- if pl_lc == finish_label_lc -%}
+          {%- assign color_field = color_pattern.color.value | default: color_pattern.color -%}
+          {%- if color_field.rgb != blank -%}
+            {%- assign css_color = 'rgb(' | append: color_field.rgb | append: ')' -%}
+          {%- elsif color_field != blank -%}
+            {%- capture _color_raw -%}{{ color_field }}{%- endcapture -%}
+            {%- assign _color_raw = _color_raw | strip -%}
+            {%- if _color_raw != blank -%}
+              {%- assign css_color = _color_raw -%}
+            {%- endif -%}
+          {%- endif -%}
+          {%- break -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+
+    {%- if css_color == blank -%}
+      {%- for product_option in cat_product.options_with_values -%}
+        {%- assign option_name_lc = product_option.name | downcase -%}
+        {%- unless option_name_lc == 'color' or option_name_lc == 'colour' or option_name_lc == 'colors' -%}
+          {%- continue -%}
+        {%- endunless -%}
+        {%- for product_option_value in product_option.values -%}
+          {%- assign ov_lc = product_option_value.name | downcase | strip -%}
+          {%- if ov_lc == finish_label_lc -%}
+            {%- if product_option_value.swatch.color != blank -%}
+              {%- assign css_color = 'rgb(' | append: product_option_value.swatch.color.rgb | append: ')' -%}
+            {%- endif -%}
+            {%- break -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+
+{%- if css_color != blank -%}
+  {%- unless css_color contains 'rgb(' -%}
+    {%- unless css_color contains '#' -%}
+      {%- assign css_color = '#' | append: css_color -%}
+    {%- endunless -%}
+  {%- endunless -%}
+{%- else -%}
+  {%- assign css_color = '#1F1F1E' -%}
+{%- endif -%}
+{{- css_color -}}

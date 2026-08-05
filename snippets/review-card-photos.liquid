@@ -1,0 +1,50 @@
+{%- doc -%}
+  Review card photo thumbnails with GLightbox gallery (§5.6).
+  @param {array} photos - review_entry.photos.value
+  @param {string} gallery_id - unique per review (data-gallery group)
+  @param {number} photo_limit - max photos shown (default 4)
+{%- enddoc -%}
+
+{%- liquid
+  assign photo_limit = photo_limit | default: 4 | plus: 0
+  assign gallery_id = gallery_id | default: 'review'
+  assign photos_shown = 0
+-%}
+
+{%- if photos != blank -%}
+  <div class="reviews-card__photos">
+    {%- for photo in photos -%}
+      {%- if photos_shown >= photo_limit -%}
+        {%- break -%}
+      {%- endif -%}
+      {%- if photo.url == blank -%}
+        {%- continue -%}
+      {%- endif -%}
+
+      {%- liquid
+        assign photos_shown = photos_shown | plus: 1
+        assign photo_url = photo.url
+        assign sep = '?'
+        if photo_url contains '?'
+          assign sep = '&'
+        endif
+        assign photo_full = photo_url | append: sep | append: 'width=1200'
+      -%}
+
+      <a
+        href="{{ photo_full }}"
+        class="reviews-card__photo glightbox"
+        data-gallery="review-{{ gallery_id | escape }}"
+        aria-label="Enlarge photo {{ photos_shown }}"
+      >
+        <img
+          src="{{ photo.url }}"
+          alt="{{ photo.alt | escape }}"
+          width="56"
+          height="56"
+          loading="lazy"
+        >
+      </a>
+    {%- endfor -%}
+  </div>
+{%- endif -%}

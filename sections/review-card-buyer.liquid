@@ -1,0 +1,177 @@
+{{ 'reviews-components.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign verified_buyer_label = section.settings.verified_buyer_label
+  assign sample_label = section.settings.sample_label
+  assign returns_label = section.settings.returns_label
+  assign photo_limit = section.settings.photo_limit
+
+  assign cards_shown = 0
+  for review_entry in shop.metaobjects.review.values
+    if section.settings.buyer_only and review_entry.reviewer_type.value != 'buyer'
+      continue
+    endif
+    if review_entry.status.value != 'approved'
+      continue
+    endif
+    assign cards_shown = cards_shown | plus: 1
+  endfor
+-%}
+
+{%- if cards_shown > 0 -%}
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="section section--{{ section.settings.section_width }} color-{{ section.settings.color_scheme }} spacing-style reviews-surface reviews-surface--buyer-cards section-{{ section.id }}"
+  style="{% render 'spacing-style', settings: section.settings %}"
+>
+  {%- if section.settings.heading != blank -%}
+    <h2 class="reviews-test-page__title">{{ section.settings.heading }}</h2>
+  {%- endif -%}
+  {%- if section.settings.intro != blank -%}
+    <p class="reviews-test-page__intro">{{ section.settings.intro }}</p>
+  {%- endif -%}
+
+  <div class="reviews-cards">
+    {%- for review_entry in shop.metaobjects.review.values -%}
+      {%- if section.settings.buyer_only and review_entry.reviewer_type.value != 'buyer' -%}
+        {%- continue -%}
+      {%- endif -%}
+      {%- if review_entry.status.value != 'approved' -%}
+        {%- continue -%}
+      {%- endif -%}
+      {% render 'review-card-from-metaobject',
+        review_entry: review_entry,
+        verified_buyer_label: verified_buyer_label,
+        gift_recipient_label: section.settings.gift_recipient_label,
+        gift_gifter_label: section.settings.gift_gifter_label,
+        sample_label: sample_label,
+        returns_label: returns_label,
+        photo_limit: photo_limit
+      %}
+    {%- endfor -%}
+  </div>
+</div>
+
+{{ 'glightbox.min.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'glightbox.min.js' | asset_url }}" defer></script>
+<script src="{{ 'reviews-lightbox.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Buyer review cards",
+  "tag": "section",
+  "class": "reviews-section-buyer",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        {
+          "value": "page-width",
+          "label": "t:options.page"
+        },
+        {
+          "value": "full-width",
+          "label": "t:options.full"
+        }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "header",
+      "content": "t:content.padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Buyer reviews"
+    },
+    {
+      "type": "textarea",
+      "id": "intro",
+      "label": "Intro",
+      "default": "§5.6 Buyer Review Card — data from Review metaobjects (approved buyers)."
+    },
+    {
+      "type": "checkbox",
+      "id": "buyer_only",
+      "label": "Buyer reviews only",
+      "info": "Off on reviews-test so recipient, gifter, and accessory entries (and Sample pill) are visible for M3 QA.",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "verified_buyer_label",
+      "label": "Verified buyer tag",
+      "default": "Verified buyer"
+    },
+    {
+      "type": "text",
+      "id": "gift_recipient_label",
+      "label": "Gift recipient tag",
+      "default": "Gift recipient"
+    },
+    {
+      "type": "text",
+      "id": "gift_gifter_label",
+      "label": "Gift giver tag",
+      "default": "Gift giver"
+    },
+    {
+      "type": "text",
+      "id": "sample_label",
+      "label": "Sample tag",
+      "default": "Sample"
+    },
+    {
+      "type": "text",
+      "id": "returns_label",
+      "label": "Returns badge",
+      "default": "Order returned"
+    },
+    {
+      "type": "range",
+      "id": "photo_limit",
+      "label": "Photo limit per review",
+      "min": 1,
+      "max": 4,
+      "step": 1,
+      "default": 4
+    }
+  ],
+  "presets": [
+    {
+      "name": "Buyer review cards"
+    }
+  ]
+}
+{% endschema %}

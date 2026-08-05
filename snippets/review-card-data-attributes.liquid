@@ -1,0 +1,88 @@
+{%- doc -%}
+  M7 filter data attributes for client-side filter/sort (§4.6).
+  @param {object} review_entry
+{%- enddoc -%}
+
+{%- liquid
+  assign reviewer_type = review_entry.reviewer_type.value | default: 'buyer'
+  assign is_sample_val = 'false'
+  if review_entry.is_sample.value == true or review_entry.is_sample.value == 'true'
+    assign is_sample_val = 'true'
+  endif
+
+  assign has_photos = 'false'
+  assign photos = review_entry.photos.value
+  if photos != blank and photos.size > 0
+    for photo in photos
+      if photo.url != blank
+        assign has_photos = 'true'
+        break
+      endif
+    endfor
+  endif
+
+  assign owns_handles = ''
+  assign color_variant_ids = ''
+  assign ownership = review_entry.ownership.value
+  if ownership != blank
+    for group in ownership
+      assign gh = group.product_handle | default: ''
+      if gh != blank
+        if owns_handles != blank
+          assign owns_handles = owns_handles | append: ','
+        endif
+        assign owns_handles = owns_handles | append: gh
+      endif
+      if group.swatches != blank
+        for sw in group.swatches
+          assign vid = sw.variant_id | default: ''
+          if vid == blank
+            continue
+          endif
+          if color_variant_ids != blank
+            assign color_variant_ids = color_variant_ids | append: ','
+          endif
+          assign color_variant_ids = color_variant_ids | append: vid
+        endfor
+      elsif group.variant_ids != blank
+        for vid in group.variant_ids
+          if color_variant_ids != blank
+            assign color_variant_ids = color_variant_ids | append: ','
+          endif
+          assign color_variant_ids = color_variant_ids | append: vid
+        endfor
+      endif
+    endfor
+  endif
+
+  assign acq_singles = ''
+  assign acq_bundles = ''
+  assign acquisition = review_entry.acquisition.value
+  if acquisition.singles != blank
+    assign acq_singles = acquisition.singles | join: ','
+  endif
+  if acquisition.bundles != blank
+    for bundle in acquisition.bundles
+      assign bt = bundle.tag | default: ''
+      if bt != blank
+        if acq_bundles != blank
+          assign acq_bundles = acq_bundles | append: ','
+        endif
+        assign acq_bundles = acq_bundles | append: bt
+      endif
+    endfor
+  endif
+
+  assign submitted_iso = review_entry.submitted_at.value | default: ''
+  assign review_handle = review_entry.system.handle | default: review_entry.handle
+-%}
+data-review-handle="{{ review_handle | escape }}"
+data-reviewer-type="{{ reviewer_type | escape }}"
+data-is-sample="{{ is_sample_val }}"
+data-rating="{{ review_entry.rating.value | plus: 0 }}"
+data-submitted-at="{{ submitted_iso | escape }}"
+data-has-photos="{{ has_photos }}"
+data-owns-handles="{{ owns_handles | escape }}"
+data-color-variant-ids="{{ color_variant_ids | escape }}"
+data-acq-singles="{{ acq_singles | escape }}"
+data-acq-bundles="{{ acq_bundles | escape }}"

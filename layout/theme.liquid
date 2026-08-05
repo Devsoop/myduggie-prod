@@ -151,9 +151,19 @@
       </style>
     {% endif %}
 
+    {%- liquid
+      # Review form / thank-you / inactive: footer email signup mid-form would wipe the form.
+      assign suppress_footer_suffixes = 'review-thank-you,review-link-inactive,review-buyer,review-recipient,review-gifter,review-accessory' | split: ','
+      assign suppress_footer = false
+      if suppress_footer_suffixes contains template.suffix
+        assign suppress_footer = true
+      endif
+    -%}
+    {%- unless suppress_footer -%}
     <footer>
       {% sections 'footer-group' %}
     </footer>
+    {%- endunless -%}
 
     {% render 'search-modal' %}
 

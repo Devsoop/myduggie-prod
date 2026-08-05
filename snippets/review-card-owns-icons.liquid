@@ -1,0 +1,156 @@
+{%- doc -%}
+  Owns row swatch images from `ownership` JSON (§4.6, M6).
+
+  Prefers the durable per-review snapshot (`ownership[].swatches`) so retired colors
+  keep rendering permanently, independent of the live catalog. Falls back to the live
+  catalog variant image for records written before the snapshot existed.
+
+  Groups render in price-descending product order (The Lil' Duggie before the keychain),
+  with a stable product_handle tiebreaker, so the row reads the same on every card
+  regardless of the order the groups were stored in (Brian punch list #1).
+
+  @param {array} ownership - review_entry.ownership.value
+  @param {number} [icon_limit] - max swatches rendered (default 12)
+{%- enddoc -%}
+
+{%- liquid
+  assign icon_limit = icon_limit | default: 12 | plus: 0
+  assign icons_shown = 0
+
+  # Build a price-descending render order. Price comes from the write-time snapshot
+  # (group.max_price) when present, else the live catalog; a 10-wide zero-padded key
+  # makes the string sort numeric, and the handle is appended as a stable tiebreaker.
+  assign sort_lines = ''
+  if ownership != blank
+    for group in ownership
+      assign gh = group.product_handle | default: ''
+      assign gprice = group.max_price | default: 0 | plus: 0
+      if gprice == 0
+        assign catalog_lookup = all_products[gh]
+        if catalog_lookup != blank and catalog_lookup != empty
+          assign gprice = catalog_lookup.price | default: 0
+        endif
+      endif
+      assign price_key = gprice | prepend: '0000000000' | slice: -10, 10
+      assign line = price_key | append: '~' | append: gh
+      if sort_lines == ''
+        assign sort_lines = line
+      else
+        assign sort_lines = sort_lines | append: '|||' | append: line
+      endif
+    endfor
+  endif
+-%}
+
+{%- if sort_lines != blank -%}
+  {%- assign sorted_lines = sort_lines | split: '|||' | sort | reverse -%}
+  {%- for sline in sorted_lines -%}
+    {%- if icons_shown >= icon_limit -%}
+      {%- break -%}
+    {%- endif -%}
+
+    {%- assign target_handle = sline | split: '~' | last -%}
+    {%- assign group = blank -%}
+    {%- for g in ownership -%}
+      {%- if g.product_handle == target_handle -%}
+        {%- assign group = g -%}
+        {%- break -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- if group == blank -%}
+      {%- continue -%}
+    {%- endif -%}
+
+    {%- if group.swatches != blank and group.swatches.size > 0 -%}
+      {%- comment -%} Durable snapshot path — no catalog lookup, survives retired colors. {%- endcomment -%}
+      {%- for sw in group.swatches -%}
+        {%- if icons_shown >= icon_limit -%}
+          {%- break -%}
+        {%- endif -%}
+        {%- if sw.swatch_file_url == blank -%}
+          {%- continue -%}
+        {%- endif -%}
+
+        {%- liquid
+          assign sep = '?'
+          if sw.swatch_file_url contains '?'
+            assign sep = '&'
+          endif
+          assign image_src = sw.swatch_file_url | append: sep | append: 'width=120'
+
+          assign tooltip_label = sw.product_title | default: group.product_handle
+          assign variant_title = sw.variant_title | strip
+          if variant_title != blank and variant_title != 'Default Title'
+            assign tooltip_label = tooltip_label | append: ' · ' | append: variant_title
+          endif
+          assign finish_key = variant_title | handleize
+        -%}
+
+        {% render 'review-card-own-swatch',
+          image_src: image_src,
+          tooltip_label: tooltip_label,
+          product_handle: group.product_handle,
+          finish_key: finish_key,
+          filter_trigger: 'variant'
+        %}
+        {%- assign icons_shown = icons_shown | plus: 1 -%}
+      {%- endfor -%}
+
+    {%- else -%}
+      {%- comment -%} Fallback: pre-snapshot record — resolve the live catalog image. {%- endcomment -%}
+      {%- assign catalog_product = all_products[group.product_handle] -%}
+      {%- if catalog_product == empty -%}
+        {%- continue -%}
+      {%- endif -%}
+      {%- assign variant_ids = group.variant_ids -%}
+      {%- if variant_ids == blank -%}
+        {%- continue -%}
+      {%- endif -%}
+
+      {%- for variant_gid in variant_ids -%}
+        {%- if icons_shown >= icon_limit -%}
+          {%- break -%}
+        {%- endif -%}
+
+        {%- liquid
+          assign variant_gid_suffix = variant_gid | split: '/' | last
+          assign catalog_variant = blank
+          for v in catalog_product.variants
+            assign v_id_str = v.id | append: ''
+            if v_id_str == variant_gid_suffix
+              assign catalog_variant = v
+              break
+            endif
+          endfor
+          if catalog_variant == blank
+            continue
+          endif
+
+          assign variant_image = catalog_variant.image | default: catalog_product.featured_image
+          assign image_src = ''
+          if variant_image != blank
+            assign image_src = variant_image | image_url: width: 120
+          endif
+
+          assign tooltip_label = catalog_product.title
+          assign variant_title = catalog_variant.title | strip
+          if variant_title != blank and variant_title != 'Default Title'
+            assign tooltip_label = tooltip_label | append: ' · ' | append: variant_title
+          endif
+          assign finish_key = variant_title | handleize
+        -%}
+
+        {%- if image_src != blank -%}
+          {% render 'review-card-own-swatch',
+            image_src: image_src,
+            tooltip_label: tooltip_label,
+            product_handle: group.product_handle,
+            finish_key: finish_key,
+            filter_trigger: 'variant'
+          %}
+          {%- assign icons_shown = icons_shown | plus: 1 -%}
+        {%- endif -%}
+      {%- endfor -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}

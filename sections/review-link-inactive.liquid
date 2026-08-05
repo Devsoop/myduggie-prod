@@ -1,0 +1,158 @@
+{{ 'reviews-components.css' | asset_url | stylesheet_tag }}
+
+{%- comment -%}
+  §5.5b — link expired / already submitted / order not found.
+
+  Production: App Proxy /enter failures redirect here via HTML bridge (never raw JSON).
+  Theme JS maps proxy error codes to ?state=expired|used|order_not_found.
+
+  Theme editor: Preview state setting overrides for QA.
+{%- endcomment -%}
+
+{%- liquid
+  assign link_state = 'expired'
+  assign preview_state = section.settings.preview_state | strip
+
+  if request.design_mode and preview_state != blank
+    if preview_state == 'used' or preview_state == 'expired' or preview_state == 'order_not_found'
+      assign link_state = preview_state
+    endif
+  endif
+-%}
+
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="section section--{{ section.settings.section_width }} color-{{ section.settings.color_scheme }} spacing-style reviews-surface reviews-surface--status section-{{ section.id }}"
+  style="{% render 'spacing-style', settings: section.settings %}"
+>
+  <div
+    class="reviews-status-page"
+    data-reviews-link-state
+    data-link-state="{{ link_state }}"
+    data-design-mode="{% if request.design_mode %}true{% else %}false{% endif %}"
+  >
+    <div class="reviews-status-card" data-state="expired">
+      <div class="reviews-status-card__icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+      </div>
+      <h1 class="reviews-status-card__heading">This link has expired.</h1>
+      <p class="reviews-status-card__body">
+        Email
+        <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+        and we'll send a fresh one.
+      </p>
+    </div>
+
+    <div class="reviews-status-card" data-state="used" hidden>
+      <div class="reviews-status-card__icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+      </div>
+      <h1 class="reviews-status-card__heading">This review has already been submitted.</h1>
+      <p class="reviews-status-card__body">
+        Thank you for taking the time. Email
+        <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+        if you need to make a change.
+      </p>
+    </div>
+
+    <div class="reviews-status-card" data-state="order_not_found" hidden>
+      <div class="reviews-status-card__icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.35-4.35"/>
+          <path d="M11 8v6"/>
+          <path d="M8 11h6"/>
+        </svg>
+      </div>
+      <h1 class="reviews-status-card__heading">We couldn't find your order.</h1>
+      <p class="reviews-status-card__body">
+        Email
+        <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+        and we'll sort it out.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="{{ 'reviews-form.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Review link inactive",
+  "tag": "section",
+  "class": "reviews-section-link-inactive",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        { "value": "page-width", "label": "t:options.page" },
+        { "value": "full-width", "label": "t:options.full" }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "header",
+      "content": "t:content.padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "header",
+      "content": "Preview (theme editor only)"
+    },
+    {
+      "type": "select",
+      "id": "preview_state",
+      "label": "Preview state",
+      "options": [
+        { "value": "", "label": "Expired (default)" },
+        { "value": "expired", "label": "Expired" },
+        { "value": "used", "label": "Already submitted" },
+        { "value": "order_not_found", "label": "Order not found" }
+      ],
+      "default": ""
+    },
+    {
+      "type": "paragraph",
+      "content": "§5.5b — Live traffic: App Proxy sets reviews_link_state cookie before redirect. Preview state applies only in the theme editor."
+    }
+  ],
+  "presets": [
+    {
+      "name": "Review link inactive"
+    }
+  ]
+}
+{% endschema %}

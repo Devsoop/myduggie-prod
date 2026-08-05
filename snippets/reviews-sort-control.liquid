@@ -1,0 +1,11 @@
+{%- doc -%}
+  M7 sort control — Most recent (default) / Highest rated.
+{%- enddoc -%}
+
+<div class="reviews-page__sort">
+  <label class="reviews-page__sort-label" for="reviews-sort-{{ section_id }}">Sort</label>
+  <select id="reviews-sort-{{ section_id }}" class="reviews-page__sort-select" data-reviews-sort aria-label="Sort reviews">
+    <option value="recent" selected>Most recent</option>
+    <option value="rating">Highest rated</option>
+  </select>
+</div>

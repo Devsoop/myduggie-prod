@@ -1,13 +1,14 @@
 {%- doc -%}
   Relative date (<30 days) or absolute after.
-  @param {string} submitted_at - ISO 8601 datetime
+  Single rule for all screen sizes:
+  - < 30 days: relative and spelled out (3 days ago, 2 weeks ago)
+  - ≥ 30 days: month and year (June 2026)
 {%- enddoc -%}
 
 {%- liquid
   assign submitted_at = submitted_at | default: '' | strip
-  if submitted_at == blank
-    assign display_date = ''
-  else
+  assign display_date = ''
+  if submitted_at != blank
     assign submitted_ts = submitted_at | date: '%s' | plus: 0
     assign now_ts = 'now' | date: '%s' | plus: 0
     assign diff_seconds = now_ts | minus: submitted_ts
@@ -19,22 +20,21 @@
       assign display_date = '1 day ago'
     elsif diff_days < 7
       assign display_date = diff_days | append: ' days ago'
-    elsif diff_days < 14
+    elsif diff_days < 30
       assign week_count = diff_days | divided_by: 7
       if week_count == 1
         assign display_date = '1 week ago'
       else
         assign display_date = week_count | append: ' weeks ago'
       endif
-    elsif diff_days < 30
-      assign week_count = diff_days | divided_by: 7
-      assign display_date = week_count | append: ' weeks ago'
     else
-      assign display_date = submitted_at | date: '%B %d, %Y'
+      assign display_date = submitted_at | date: '%B %Y'
     endif
   endif
 -%}
 
 {%- if display_date != blank -%}
-  <time class="reviews-card__date" datetime="{{ submitted_at }}">{{ display_date }}</time>
+  <time class="reviews-card__date" datetime="{{ submitted_at }}">
+    {{ display_date }}
+  </time>
 {%- endif -%}

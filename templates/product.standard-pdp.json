@@ -584,7 +584,7 @@
       }
     },
     "reviews": {
-      "type": "pdp-reviews",
+      "type": "reviews-surface",
       "settings": {
         "heading": "Reviews",
         "ftc_disclosure": "<p><em>From the people who have one. For the people thinking about one.</em></p><p><em>Every review here is from someone who bought one, was sent one as a gift, or gave one as a gift. We email and ask. If they write, we publish — first name and last initial, exactly what they wrote. Reviews from people we sent a free unit to are tagged \"Sample.\"</em></p><p><em>What they loved. What they'd change. Everything in between.</em></p>",

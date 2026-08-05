@@ -1,0 +1,22 @@
+{%- doc -%}
+  Centered status card — §5.5 Thank-You / §5.5b Link inactive shared shell (M2).
+  @param {string} link_state - expired | used
+{%- enddoc -%}
+
+<div class="reviews-status-card">
+  {%- if link_state == 'used' -%}
+    <h1 class="reviews-status-card__heading">This review has already been submitted.</h1>
+    <p class="reviews-status-card__body">
+      Thank you for taking the time. Email
+      <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+      if you need to make a change.
+    </p>
+  {%- else -%}
+    <h1 class="reviews-status-card__heading">This link has expired.</h1>
+    <p class="reviews-status-card__body">
+      Email
+      <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+      and we'll send a fresh one.
+    </p>
+  {%- endif -%}
+</div>

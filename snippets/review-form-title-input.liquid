@@ -1,0 +1,25 @@
+{%- doc -%}
+  Review title input — shared by all four review forms. Mandatory, 70-char hard
+  cap with a live character counter (client cap via maxlength; the app
+  re-validates server-side).
+{%- enddoc -%}
+
+<div class="reviews-form__field">
+  <label class="reviews-form__label" for="review_title">Review title</label>
+  <input
+    type="text"
+    id="review_title"
+    name="title"
+    class="reviews-form__input"
+    placeholder="The one thing you&#39;d tell a friend"
+    maxlength="70"
+    required
+    autocomplete="off"
+    data-reviews-field="title"
+    data-reviews-title
+  >
+  <div class="reviews-form__title-foot">
+    <p class="reviews-form__field-error" data-reviews-error="title" hidden>Required.</p>
+    <p class="reviews-form__char-counter" data-reviews-title-counter aria-live="polite">0/70</p>
+  </div>
+</div>

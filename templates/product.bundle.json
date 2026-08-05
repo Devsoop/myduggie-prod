@@ -18,7 +18,7 @@
       }
     },
     "reviews": {
-      "type": "pdp-reviews",
+      "type": "reviews-surface",
       "settings": {
         "heading": "Reviews",
         "color_scheme": "",

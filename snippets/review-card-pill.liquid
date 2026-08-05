@@ -2,11 +2,35 @@
   Review tag pill with optional SVG icon (Brian post-M1 #2).
   @param {string} label - Pill text
   @param {string} [icon] - verified-buyer | gift-recipient | gift-gifter | blank for Sample
+  @param {boolean} [filterable] - When true, renders as a filter trigger button (M8)
+  @param {string} [filter_key] - reviews filter key e.g. reviewer
+  @param {string} [filter_value] - filter value e.g. buyer
+  @param {string} [filter_tooltip] - desktop hover tooltip
 {%- enddoc -%}
 
-<span class="reviews-card__pill">
-  {%- if icon != blank -%}
-    {% render 'review-pill-icon', icon: icon %}
-  {%- endif -%}
-  <span class="reviews-card__pill-label">{{ label }}</span>
-</span>
+{%- liquid
+  assign filterable = filterable | default: false
+-%}
+
+{%- if filterable and filter_key != blank and filter_value != blank -%}
+  <button
+    type="button"
+    class="reviews-card__pill reviews-card__pill--reviewer-type reviews-card__filter-trigger"
+    data-reviews-filter-trigger="{{ filter_key | escape }}"
+    data-filter-value="{{ filter_value | escape }}"
+    data-filter-mode="add"
+    aria-pressed="false"
+  >
+    {%- if icon != blank -%}
+      {% render 'review-pill-icon', icon: icon %}
+    {%- endif -%}
+    <span class="reviews-card__pill-label">{{ label }}</span>
+  </button>
+{%- else -%}
+  <span class="reviews-card__pill reviews-card__pill--reviewer-type">
+    {%- if icon != blank -%}
+      {% render 'review-pill-icon', icon: icon %}
+    {%- endif -%}
+    <span class="reviews-card__pill-label">{{ label }}</span>
+  </span>
+{%- endif -%}

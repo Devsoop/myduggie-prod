@@ -1,0 +1,204 @@
+{%- doc -%}
+  Render one review card from a Review metaobject entry (M6).
+  Routes by reviewer_type to buyer, recipient, or gifter card templates.
+  @param {object} review_entry - shop.metaobjects.review entry
+  @param {string} verified_buyer_label
+  @param {string} gift_recipient_label
+  @param {string} gift_gifter_label
+  @param {string} sample_label
+  @param {string} returns_label
+  @param {number} photo_limit
+  @param {boolean} [filterable] - M8 click-to-filter on reviews page
+{%- enddoc -%}
+
+{%- liquid
+  assign filterable = filterable | default: false
+  assign review_id = review_entry.system.handle | default: review_entry.handle
+  assign rating = review_entry.rating.value
+  assign submitted_at = review_entry.submitted_at.value
+  assign reviewer_type = review_entry.reviewer_type.value | default: 'buyer'
+  assign is_sample = false
+  if review_entry.is_sample.value == true or review_entry.is_sample.value == 'true'
+    assign is_sample = true
+  endif
+
+  assign reviewer_pill_icon = 'verified-buyer'
+  assign reviewer_pill_label = verified_buyer_label | default: 'Verified buyer'
+  if reviewer_type == 'recipient'
+    assign reviewer_pill_icon = 'gift-recipient'
+    assign reviewer_pill_label = gift_recipient_label | default: 'Gift recipient'
+  elsif reviewer_type == 'gifter'
+    assign reviewer_pill_icon = 'gift-giver'
+    assign reviewer_pill_label = gift_gifter_label | default: 'Gift giver'
+  endif
+
+  assign review_title = review_entry.title.value
+
+  assign reviewer_name = review_entry.reviewer_name.value
+  assign reviewer_first = ''
+  assign reviewer_last = ''
+  if reviewer_name != blank
+    capture reviewer_name_parts
+      render 'review-reviewer-name-parts', reviewer_name: reviewer_name
+    endcapture
+    assign reviewer_name_parts = reviewer_name_parts | strip | split: '|'
+    assign reviewer_first = reviewer_name_parts[0]
+    assign reviewer_last = reviewer_name_parts[1]
+  endif
+
+  assign answers = review_entry.answers.value
+
+  assign order_returned = false
+  if review_entry.order_returned.value == true
+    assign order_returned = true
+  endif
+  if order_returned == false and answers.order_returned == true
+    assign order_returned = true
+  endif
+
+  assign how_often = answers.how_often
+  assign where_it_lives = answers.where_it_lives
+  assign dugout_experience = answers.dugout_experience
+
+  assign prose_1_label = ''
+  assign prose_1_body = ''
+  assign prose_2_label = ''
+  assign prose_2_body = ''
+  assign prose_3_label = ''
+  assign prose_3_body = ''
+
+  if answers.prose != blank
+    for prose_item in answers.prose
+      if forloop.index == 1
+        assign prose_1_label = prose_item.display_label | default: prose_item.label
+        assign prose_1_body = prose_item.body
+      elsif forloop.index == 2
+        assign prose_2_label = prose_item.display_label | default: prose_item.label
+        assign prose_2_body = prose_item.body
+      elsif forloop.index == 3
+        assign prose_3_label = prose_item.display_label | default: prose_item.label
+        assign prose_3_body = prose_item.body
+      endif
+    endfor
+  endif
+
+  assign photos = review_entry.photos.value
+  assign photo_count = photos | size | default: 0
+
+  assign ownership = review_entry.ownership.value
+  assign owns_icon_count = 0
+  if ownership != blank
+    for group in ownership
+      if group.swatches != blank and group.swatches.size > 0
+        assign owns_icon_count = owns_icon_count | plus: group.swatches.size
+      elsif group.variant_ids != blank
+        assign owns_icon_count = owns_icon_count | plus: group.variant_ids.size
+      endif
+    endfor
+  endif
+
+  assign gave = review_entry.gave.value
+  assign gave_icon_count = gave | size | default: 0
+
+  assign reviewer_filter_value = 'buyer'
+  if reviewer_type == 'recipient'
+    assign reviewer_filter_value = 'recipient'
+  elsif reviewer_type == 'gifter'
+    assign reviewer_filter_value = 'gifter'
+  endif
+-%}
+
+{%- if reviewer_type == 'gifter' -%}
+  {% render 'review-card-gifter',
+    review_id: review_id,
+    review_title: review_title,
+    rating: rating,
+    reviewer_first: reviewer_first,
+    reviewer_last: reviewer_last,
+    submitted_at: submitted_at,
+    order_returned: order_returned,
+    reviewer_pill_icon: reviewer_pill_icon,
+    reviewer_pill_label: reviewer_pill_label,
+    is_sample: is_sample,
+    photo_count: photo_count,
+    photos: photos,
+    gave: gave,
+    gave_icon_count: gave_icon_count,
+    ownership: ownership,
+    prose_1_label: prose_1_label,
+    prose_1_body: prose_1_body,
+    prose_2_label: prose_2_label,
+    prose_2_body: prose_2_body,
+    prose_3_label: prose_3_label,
+    prose_3_body: prose_3_body,
+    sample_label: sample_label,
+    returns_label: returns_label,
+    photo_limit: photo_limit,
+    filterable: filterable,
+    reviewer_filter_value: reviewer_filter_value
+  %}
+{%- elsif reviewer_type == 'recipient' -%}
+  {% render 'review-card-recipient',
+    review_id: review_id,
+    review_title: review_title,
+    rating: rating,
+    reviewer_first: reviewer_first,
+    reviewer_last: reviewer_last,
+    submitted_at: submitted_at,
+    order_returned: order_returned,
+    reviewer_pill_icon: reviewer_pill_icon,
+    reviewer_pill_label: reviewer_pill_label,
+    is_sample: is_sample,
+    how_often: how_often,
+    where_it_lives: where_it_lives,
+    dugout_experience: dugout_experience,
+    photo_count: photo_count,
+    photos: photos,
+    owns_icon_count: owns_icon_count,
+    ownership: ownership,
+    prose_1_label: prose_1_label,
+    prose_1_body: prose_1_body,
+    prose_2_label: prose_2_label,
+    prose_2_body: prose_2_body,
+    prose_3_label: prose_3_label,
+    prose_3_body: prose_3_body,
+    verified_buyer_label: verified_buyer_label,
+    sample_label: sample_label,
+    returns_label: returns_label,
+    photo_limit: photo_limit,
+    filterable: filterable,
+    reviewer_filter_value: reviewer_filter_value
+  %}
+{%- else -%}
+  {% render 'review-card-buyer',
+    review_id: review_id,
+    review_title: review_title,
+    rating: rating,
+    reviewer_first: reviewer_first,
+    reviewer_last: reviewer_last,
+    submitted_at: submitted_at,
+    order_returned: order_returned,
+    reviewer_pill_icon: reviewer_pill_icon,
+    reviewer_pill_label: reviewer_pill_label,
+    is_sample: is_sample,
+    how_often: how_often,
+    where_it_lives: where_it_lives,
+    dugout_experience: dugout_experience,
+    photo_count: photo_count,
+    photos: photos,
+    owns_icon_count: owns_icon_count,
+    ownership: ownership,
+    prose_1_label: prose_1_label,
+    prose_1_body: prose_1_body,
+    prose_2_label: prose_2_label,
+    prose_2_body: prose_2_body,
+    prose_3_label: prose_3_label,
+    prose_3_body: prose_3_body,
+    verified_buyer_label: verified_buyer_label,
+    sample_label: sample_label,
+    returns_label: returns_label,
+    photo_limit: photo_limit,
+    filterable: filterable,
+    reviewer_filter_value: reviewer_filter_value
+  %}
+{%- endif -%}

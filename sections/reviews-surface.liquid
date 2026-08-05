@@ -1,0 +1,842 @@
+{{ 'reviews-components.css' | asset_url | stylesheet_tag }}
+
+{%- liquid
+  assign verified_buyer_label = section.settings.verified_buyer_label
+  assign sample_label = section.settings.sample_label
+  assign returns_label = section.settings.returns_label
+  assign photo_limit = section.settings.photo_limit
+  assign caption_prefix = section.settings.caption_prefix
+  assign scope_mode = section.settings.scope_mode | default: 'product'
+  assign enable_filters = section.settings.enable_filters
+
+  if scope_mode == 'product' and product != blank
+    unless section.settings.enable_filters == false
+      assign enable_filters = true
+    endunless
+  endif
+
+  if scope_mode == 'product' and product == blank
+    assign enable_filters = false
+  endif
+
+  assign ctx_product_handle = ''
+  assign ctx_product_id = ''
+  assign ctx_is_bundle = false
+  assign ctx_bundle_tag = ''
+  assign ctx_show_owns_facet = false
+  assign ctx_review_category = ''
+
+  if product != blank and scope_mode == 'product'
+    assign ctx_product_handle = product.handle
+    assign ctx_product_id = product.id | append: ''
+    assign ctx_review_category = product.metafields.custom.review_category.value | downcase | strip
+
+    # Catalog signal decides. The handle list below is only a fallback for
+    # products that predate the metafield — new products set the field instead.
+    if ctx_review_category == 'bundle'
+      assign ctx_is_bundle = true
+    elsif ctx_review_category == blank
+      case ctx_product_handle
+        when 'the-pair', 'the-complete-carry', 'the-home-kit'
+          assign ctx_is_bundle = true
+      endcase
+    endif
+
+    if ctx_is_bundle
+      assign ctx_bundle_tag = product.title | append: ':' | append: product.id
+    else
+      assign ctx_show_owns_facet = true
+    endif
+  endif
+
+  assign average = 0
+  assign total_count = 0
+  assign count_5 = 0
+  assign count_4 = 0
+  assign count_3 = 0
+  assign count_2 = 0
+  assign count_1 = 0
+  assign rating_sum = 0
+
+  assign facet_reviewer_buyer = 0
+  assign facet_reviewer_recipient = 0
+  assign facet_reviewer_gifter = 0
+  assign facet_reviewer_sample = 0
+  assign facet_rating_5 = 0
+  assign facet_rating_4 = 0
+  assign facet_rating_3 = 0
+  assign facet_rating_2 = 0
+  assign facet_rating_1 = 0
+  assign facet_rating_total = 0
+  assign facet_photos = 0
+  assign facet_owns_count = 0
+  assign facet_owns_html = ''
+  assign facet_color_count = 0
+  assign facet_color_html = ''
+  assign facet_freq_daily = 0
+  assign facet_freq_weekly = 0
+  assign facet_freq_occasionally = 0
+  assign facet_carry_pocket = 0
+  assign facet_carry_bag = 0
+  assign facet_carry_home = 0
+  assign facet_exp_veteran = 0
+  assign facet_exp_rookie = 0
+  assign ownership_handles_pipe = '|'
+  # Owns facet identities as '<identity>~<handle>|' pairs. Identity is the numeric
+  # product id when the snapshot has one, so a renamed product stays one facet
+  # row; the handle rides along for the catalog price lookup.
+  assign ownership_owns_pipe = '|'
+  assign filter_labels_variant_seen = '|'
+  assign filter_labels_variant_entries = ''
+
+  for review_entry in shop.metaobjects.review.values
+    if review_entry.status.value != 'approved'
+      continue
+    endif
+
+    capture match_result
+      render 'review-matches-page-product', review_entry: review_entry, scope_mode: scope_mode, ctx_product_handle: ctx_product_handle, ctx_product_id: ctx_product_id, ctx_is_bundle: ctx_is_bundle, ctx_bundle_tag: ctx_bundle_tag
+    endcapture
+    assign match_result = match_result | strip
+    if match_result != 'true'
+      continue
+    endif
+
+    assign r = review_entry.rating.value | plus: 0
+    assign rating_sum = rating_sum | plus: r
+    assign total_count = total_count | plus: 1
+    assign facet_rating_total = facet_rating_total | plus: 1
+
+    if r == 5
+      assign count_5 = count_5 | plus: 1
+      assign facet_rating_5 = facet_rating_5 | plus: 1
+    elsif r == 4
+      assign count_4 = count_4 | plus: 1
+      assign facet_rating_4 = facet_rating_4 | plus: 1
+    elsif r == 3
+      assign count_3 = count_3 | plus: 1
+      assign facet_rating_3 = facet_rating_3 | plus: 1
+    elsif r == 2
+      assign count_2 = count_2 | plus: 1
+      assign facet_rating_2 = facet_rating_2 | plus: 1
+    elsif r == 1
+      assign count_1 = count_1 | plus: 1
+      assign facet_rating_1 = facet_rating_1 | plus: 1
+    endif
+
+    assign rt = review_entry.reviewer_type.value | default: 'buyer'
+    if rt == 'buyer' or rt == 'accessory'
+      assign facet_reviewer_buyer = facet_reviewer_buyer | plus: 1
+    elsif rt == 'recipient'
+      assign facet_reviewer_recipient = facet_reviewer_recipient | plus: 1
+    elsif rt == 'gifter'
+      assign facet_reviewer_gifter = facet_reviewer_gifter | plus: 1
+    endif
+
+    if review_entry.is_sample.value == true or review_entry.is_sample.value == 'true'
+      assign facet_reviewer_sample = facet_reviewer_sample | plus: 1
+    endif
+
+    assign photos = review_entry.photos.value
+    if photos != blank
+      for photo in photos
+        if photo.url != blank
+          assign facet_photos = facet_photos | plus: 1
+          break
+        endif
+      endfor
+    endif
+
+    if enable_filters
+      assign answers = review_entry.answers.value
+      if answers.how_often == 'Daily'
+        assign facet_freq_daily = facet_freq_daily | plus: 1
+      elsif answers.how_often == 'Weekly'
+        assign facet_freq_weekly = facet_freq_weekly | plus: 1
+      elsif answers.how_often == 'Occasionally'
+        assign facet_freq_occasionally = facet_freq_occasionally | plus: 1
+      endif
+      if answers.where_it_lives == 'Pocket'
+        assign facet_carry_pocket = facet_carry_pocket | plus: 1
+      elsif answers.where_it_lives == 'Bag'
+        assign facet_carry_bag = facet_carry_bag | plus: 1
+      elsif answers.where_it_lives == 'Home'
+        assign facet_carry_home = facet_carry_home | plus: 1
+      endif
+      if answers.dugout_experience == 'Dugout veteran'
+        assign facet_exp_veteran = facet_exp_veteran | plus: 1
+      elsif answers.dugout_experience == 'Dugout rookie'
+        assign facet_exp_rookie = facet_exp_rookie | plus: 1
+      endif
+    endif
+
+    assign ownership = review_entry.ownership.value
+    if ownership != blank and enable_filters
+      for group in ownership
+        assign group_handle = group.product_handle | default: ''
+        if group_handle == blank or group.swatches == blank
+          continue
+        endif
+        assign group_label = group.product_title | default: '' | strip
+        if group_label == blank
+          assign group_catalog_product = all_products[group_handle]
+          if group_catalog_product != empty
+            assign group_label = group_catalog_product.title
+          else
+            assign group_label = group_handle
+          endif
+        endif
+        for sw in group.swatches
+          assign vt = sw.variant_title | default: ''
+          if vt == blank or vt == 'Default Title'
+            continue
+          endif
+          assign variant_finish_key = vt | handleize
+          assign variant_key = group_handle | append: ':' | append: variant_finish_key
+          assign variant_marker = '|' | append: variant_key | append: '|'
+          unless filter_labels_variant_seen contains variant_marker
+            assign variant_swatch_url = sw.swatch_file_url | default: sw.image_url | default: ''
+            assign variant_label = group_label | append: ' · ' | append: vt
+            assign filter_labels_variant_entries = filter_labels_variant_entries | append: variant_key | append: '§§' | append: variant_label | append: '§§' | append: variant_swatch_url | append: '||'
+            assign filter_labels_variant_seen = filter_labels_variant_seen | append: variant_key | append: '|'
+          endunless
+        endfor
+      endfor
+    endif
+
+    assign gave = review_entry.gave.value
+    if gave != blank and enable_filters
+      for item in gave
+        assign gave_variant_title = item.variant_title | default: '' | strip
+        if gave_variant_title == blank or gave_variant_title == 'Default Title'
+          continue
+        endif
+        assign gave_handle = item.product_handle | default: '' | strip
+        assign gave_label = item.product_title | default: item.title | default: '' | strip
+        if gave_label == blank and gave_handle != blank
+          assign gave_catalog_product = all_products[gave_handle]
+          if gave_catalog_product != empty
+            assign gave_label = gave_catalog_product.title
+          else
+            assign gave_label = gave_handle
+          endif
+        endif
+        if gave_handle == blank
+          assign gave_handle = gave_label | handleize
+        endif
+        if gave_label == blank
+          assign gave_label = gave_handle
+        endif
+        assign variant_finish_key = gave_variant_title | handleize
+        assign variant_key = gave_handle | append: ':' | append: variant_finish_key
+        assign variant_marker = '|' | append: variant_key | append: '|'
+        unless filter_labels_variant_seen contains variant_marker
+          assign variant_swatch_url = item.swatch_file_url | default: item.image_url | default: ''
+          assign variant_label = gave_label | append: ' · ' | append: gave_variant_title
+          assign filter_labels_variant_entries = filter_labels_variant_entries | append: variant_key | append: '§§' | append: variant_label | append: '§§' | append: variant_swatch_url | append: '||'
+          assign filter_labels_variant_seen = filter_labels_variant_seen | append: variant_key | append: '|'
+        endunless
+      endfor
+    endif
+
+    if ownership != blank and enable_filters and ctx_show_owns_facet
+      for group in ownership
+        assign gh = group.product_handle | default: ''
+        assign g_identity = group.product_id | default: '' | split: '/' | last | default: ''
+        if g_identity == blank
+          assign g_identity = gh
+        endif
+        if gh != blank
+          assign gh_marker = '|' | append: gh | append: '|'
+          unless ownership_handles_pipe contains gh_marker
+            assign ownership_handles_pipe = ownership_handles_pipe | append: gh | append: '|'
+          endunless
+        endif
+        if g_identity != blank
+          assign owns_marker = '|' | append: g_identity | append: '~'
+          unless ownership_owns_pipe contains owns_marker
+            assign ownership_owns_pipe = ownership_owns_pipe | append: g_identity | append: '~' | append: gh | append: '|'
+          endunless
+        endif
+      endfor
+    endif
+
+  endfor
+
+  if total_count > 0
+    assign average = rating_sum | times: 100 | divided_by: total_count | times: 0.01
+  endif
+
+  if section.settings.average_override != blank
+    assign average = section.settings.average_override | times: 1.0
+  endif
+
+  if enable_filters and ctx_show_owns_facet
+    assign finish_keys_pipe = '|'
+    for review_entry in shop.metaobjects.review.values
+      if review_entry.status.value != 'approved'
+        continue
+      endif
+      capture match_result
+        render 'review-matches-page-product', review_entry: review_entry, scope_mode: scope_mode, ctx_product_handle: ctx_product_handle, ctx_product_id: ctx_product_id, ctx_is_bundle: ctx_is_bundle, ctx_bundle_tag: ctx_bundle_tag
+      endcapture
+      assign match_result = match_result | strip
+      if match_result != 'true'
+        continue
+      endif
+      assign ownership = review_entry.ownership.value
+      if ownership == blank
+        continue
+      endif
+      for group in ownership
+        if group.swatches == blank
+          continue
+        endif
+        for sw in group.swatches
+          assign vt = sw.variant_title | default: ''
+          if vt == blank or vt == 'Default Title'
+            continue
+          endif
+          assign fkey = vt | handleize
+          assign fkey_marker = '|' | append: fkey | append: '|'
+          unless finish_keys_pipe contains fkey_marker
+            assign finish_keys_pipe = finish_keys_pipe | append: fkey | append: '|'
+          endunless
+        endfor
+      endfor
+    endfor
+
+    assign finish_keys_list = finish_keys_pipe | split: '|'
+    assign color_sort_entries = ''
+    assign finish_discovery_index = 0
+    for fkey in finish_keys_list
+      if fkey == blank
+        continue
+      endif
+      assign this_discovery_index = finish_discovery_index
+      assign finish_discovery_index = finish_discovery_index | plus: 1
+      assign finish_count = 0
+      assign finish_label = ''
+      assign finish_color_css = ''
+      for review_entry in shop.metaobjects.review.values
+        if review_entry.status.value != 'approved'
+          continue
+        endif
+        capture match_result
+          render 'review-matches-page-product', review_entry: review_entry, scope_mode: scope_mode, ctx_product_handle: ctx_product_handle, ctx_product_id: ctx_product_id, ctx_is_bundle: ctx_is_bundle, ctx_bundle_tag: ctx_bundle_tag
+        endcapture
+        assign match_result = match_result | strip
+        if match_result != 'true'
+          continue
+        endif
+        assign ownership = review_entry.ownership.value
+        if ownership == blank
+          continue
+        endif
+        assign review_has_finish = false
+        for group in ownership
+          if group.swatches == blank
+            continue
+          endif
+          for sw in group.swatches
+            assign vt = sw.variant_title | default: ''
+            if vt == blank or vt == 'Default Title'
+              continue
+            endif
+            assign sw_fkey = vt | handleize
+            if sw_fkey == fkey
+              assign review_has_finish = true
+              if finish_label == blank
+                assign finish_label = vt
+              endif
+            endif
+          endfor
+        endfor
+        if review_has_finish
+          assign finish_count = finish_count | plus: 1
+        endif
+      endfor
+      if finish_count > 0
+        if finish_color_css == blank
+          capture finish_color_css
+            render 'reviews-finish-color-hex', finish_label: finish_label, catalog_handles_pipe: ownership_handles_pipe, catalog_product: product
+          endcapture
+          assign finish_color_css = finish_color_css | strip
+        endif
+        assign inv_count = 99999 | minus: finish_count
+        assign sort_inv = inv_count | prepend: '0000000000' | slice: -5, 5
+        assign sort_disc = this_discovery_index | prepend: '0000000000' | slice: -5, 5
+        capture color_row
+          echo '<li class="reviews-filter__item reviews-filter__item--swatch"><label class="reviews-filter__label reviews-filter__label--swatch"><input type="checkbox" class="reviews-filter__input" name="color" value="'
+          echo fkey | escape
+          echo '" data-reviews-filter="color" data-finish-label="'
+          echo finish_label | escape
+          echo '" data-swatch-hex="'
+          echo finish_color_css | escape
+          echo '">'
+          echo '<span class="reviews-filter__swatch reviews-filter__swatch--fill" style="background-color:'
+          echo finish_color_css | escape
+          echo ';" aria-hidden="true"></span>'
+          echo '<span class="reviews-filter__finish-label">'
+          echo finish_label | escape
+          echo '</span><span class="reviews-filter__count">('
+          echo finish_count
+          echo ')</span></label></li>'
+        endcapture
+        assign color_row = color_row | strip
+        assign color_sort_entries = color_sort_entries | append: sort_inv | append: sort_disc | append: '§§§' | append: color_row | append: '||'
+      endif
+    endfor
+
+    assign color_sort_list = color_sort_entries | split: '||' | sort
+    for color_sort_item in color_sort_list
+      if color_sort_item == blank
+        continue
+      endif
+      assign color_sort_parts = color_sort_item | split: '§§§'
+      assign facet_color_count = facet_color_count | plus: 1
+      assign facet_color_html = facet_color_html | append: color_sort_parts[1]
+    endfor
+
+    assign owns_handles_list = ownership_owns_pipe | split: '|'
+    assign owns_sort_entries = ''
+    for owns_entry in owns_handles_list
+      if owns_entry == blank
+        continue
+      endif
+      assign owns_entry_parts = owns_entry | split: '~'
+      assign oh = owns_entry_parts[0]
+      assign owns_handle = owns_entry_parts[1] | default: ''
+      if oh == blank
+        continue
+      endif
+      assign owns_count = 0
+      assign owns_label = ''
+      assign owns_alias_pipe = '|'
+      for review_entry in shop.metaobjects.review.values
+        if review_entry.status.value != 'approved'
+          continue
+        endif
+        capture match_result
+          render 'review-matches-page-product', review_entry: review_entry, scope_mode: scope_mode, ctx_product_handle: ctx_product_handle, ctx_product_id: ctx_product_id, ctx_is_bundle: ctx_is_bundle, ctx_bundle_tag: ctx_bundle_tag
+        endcapture
+        assign match_result = match_result | strip
+        if match_result != 'true'
+          continue
+        endif
+        assign ownership = review_entry.ownership.value
+        if ownership == blank
+          continue
+        endif
+        assign review_owns_product = false
+        for group in ownership
+          assign group_identity = group.product_id | default: '' | split: '/' | last | default: ''
+          if group_identity == blank
+            assign group_identity = group.product_handle | default: ''
+          endif
+          if group_identity == oh
+            assign review_owns_product = true
+            if owns_label == blank and group.product_title != blank
+              assign owns_label = group.product_title
+            endif
+            assign g_alias = group.product_handle | default: ''
+            if g_alias != blank
+              assign alias_marker = '|' | append: g_alias | append: '|'
+              unless owns_alias_pipe contains alias_marker
+                assign owns_alias_pipe = owns_alias_pipe | append: g_alias | append: '|'
+              endunless
+            endif
+          endif
+        endfor
+        if review_owns_product
+          assign owns_count = owns_count | plus: 1
+        endif
+      endfor
+      if owns_count > 0
+        assign owns_catalog_product = all_products[owns_handle]
+        if owns_label == blank
+          if owns_catalog_product != empty
+            assign owns_label = owns_catalog_product.title
+          else
+            assign owns_label = owns_handle | default: oh
+          endif
+        endif
+        assign owns_alias_csv = owns_alias_pipe | remove_first: '|' | split: '|' | join: ','
+        assign facet_owns_count = facet_owns_count | plus: 1
+        capture owns_row
+          echo '<li class="reviews-filter__item"><label class="reviews-filter__label"><input type="checkbox" class="reviews-filter__input" name="owns" value="'
+          echo oh | escape
+          echo '" data-reviews-filter="owns" data-owns-handles="'
+          echo owns_alias_csv | escape
+          echo '" data-owns-label="'
+          echo owns_label | escape
+          echo '"><span class="reviews-filter__owns-label">'
+          echo owns_label | escape
+          echo '</span><span class="reviews-filter__count">('
+          echo owns_count
+          echo ')</span></label><ul class="reviews-filter__owns-pills" data-owns-pills-for="'
+          echo oh | escape
+          echo '" hidden></ul></li>'
+        endcapture
+        assign owns_row = owns_row | strip
+        # Price-descending render order (hero product first, e.g. The Lil' Duggie
+        # before the keychain) — same catalog-driven rule as the card's own Owns
+        # row (see review-card-owns-icons.liquid, Brian punch list #1), so this
+        # never hardcodes a product title and new SKUs slot in by price alone.
+        assign owns_price = 0
+        if owns_catalog_product != blank and owns_catalog_product != empty
+          assign owns_price = owns_catalog_product.price | default: 0
+        endif
+        assign owns_price_key = owns_price | prepend: '0000000000' | slice: -10, 10
+        assign owns_sort_line = owns_price_key | append: '~' | append: oh | append: '§§§' | append: owns_row
+        if owns_sort_entries == blank
+          assign owns_sort_entries = owns_sort_line
+        else
+          assign owns_sort_entries = owns_sort_entries | append: '|||' | append: owns_sort_line
+        endif
+      endif
+    endfor
+
+    assign owns_sorted_list = owns_sort_entries | split: '|||' | sort | reverse
+    for owns_sort_item in owns_sorted_list
+      if owns_sort_item == blank
+        continue
+      endif
+      assign owns_sort_parts = owns_sort_item | split: '§§§'
+      assign facet_owns_html = facet_owns_html | append: owns_sort_parts[1]
+    endfor
+  endif
+-%}
+
+{%- if enable_filters -%}
+<script src="{{ 'reviews-display.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{%- if total_count > 0 -%}
+{{ 'glightbox.min.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'glightbox.min.js' | asset_url }}" defer></script>
+<script src="{{ 'reviews-lightbox.js' | asset_url }}" defer></script>
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="section section--{{ section.settings.section_width }} color-{{ section.settings.color_scheme }} spacing-style reviews-surface reviews-surface--shell reviews-surface--page section-{{ section.id }}"
+  style="{% render 'spacing-style', settings: section.settings %}"
+  data-reviews-surface
+  data-section-id="{{ section.id }}"
+  data-scope-mode="{{ scope_mode }}"
+  data-product-handle="{{ ctx_product_handle | escape }}"
+  data-product-id="{{ ctx_product_id | escape }}"
+  data-product-title="{{ product.title | escape }}"
+  data-is-bundle="{{ ctx_is_bundle }}"
+  data-review-category="{{ ctx_review_category | escape }}"
+  data-show-owns-facet="{{ ctx_show_owns_facet }}"
+  data-cards-base="/apps/reviews/cards"
+  data-page-size="10"
+  data-label-buyer="{{ verified_buyer_label | escape }}"
+  data-label-recipient="{{ section.settings.gift_recipient_label | escape }}"
+  data-label-gifter="{{ section.settings.gift_gifter_label | escape }}"
+  data-label-sample="{{ sample_label | escape }}"
+  data-label-returns="{{ returns_label | escape }}"
+  data-photo-limit="{{ photo_limit }}"
+>
+  {%- if enable_filters -%}
+    {%- capture filter_labels_variant_json -%}
+      {%- assign variant_entries = filter_labels_variant_entries | split: '||' -%}
+      {%- assign variant_first = true -%}
+      {%- for item in variant_entries -%}
+        {%- if item == blank -%}{%- continue -%}{%- endif -%}
+        {%- assign parts = item | split: '§§' -%}
+        {%- unless variant_first -%},{%- endunless -%}
+        {{ parts[0] | json }}:{"label":{{ parts[1] | json }},"swatchUrl":{{ parts[2] | json }}}
+        {%- assign variant_first = false -%}
+      {%- endfor -%}
+    {%- endcapture -%}
+    <script type="application/json" data-reviews-filter-labels>
+      {
+        "frequency": { "Daily": "Daily user", "Weekly": "Weekly user", "Occasionally": "Occasional user" },
+        "carry": { "Pocket": "Pocket carry", "Bag": "Bag carry", "Home": "Home use" },
+        "experience": { "Dugout veteran": "Dugout veteran", "Dugout rookie": "Dugout rookie" },
+        "variant": { {{ filter_labels_variant_json | strip }} }
+      }
+    </script>
+  {%- endif -%}
+  <div class="reviews-page__intro{% unless enable_filters %} reviews-page__intro--narrow{% endunless %}">
+    <div class="reviews-page__ftc-wrap">
+      {% render 'ftc-disclosure', include_closing: false %}
+    </div>
+
+    <div class="reviews-page__divider" aria-hidden="true"></div>
+
+    <div class="reviews-page__aggregate-wrap">
+      <div class="reviews-aggregate">
+        {% render 'aggregate-rating-block',
+          average: average,
+          total_count: total_count,
+          count_5: count_5,
+          count_4: count_4,
+          count_3: count_3,
+          count_2: count_2,
+          count_1: count_1,
+          caption_prefix: caption_prefix,
+          unique_id: section.id,
+          filterable: enable_filters
+        %}
+      </div>
+    </div>
+
+    <div class="reviews-page__divider" aria-hidden="true"></div>
+
+    <p class="reviews-ftc__closing reviews-page__closing">What they loved. What they'd change. Everything in between.</p>
+  </div>
+
+  {%- if enable_filters -%}
+    <div class="reviews-page__list-controls">
+      <div class="reviews-page__toolbar">
+        <p class="reviews-page__count" data-reviews-count aria-live="polite">
+          Showing <span data-reviews-count-value>{{ total_count }}</span>
+          <span data-reviews-count-noun>{% if total_count == 1 %}review{% else %}reviews{% endif %}</span>
+        </p>
+        {% render 'reviews-sort-control', section_id: section.id %}
+      </div>
+      {% render 'reviews-active-filter-pills' %}
+    </div>
+
+    <div class="reviews-page__body">
+      {% render 'reviews-filter-sidebar',
+        ctx_show_owns_facet: ctx_show_owns_facet,
+        facet_reviewer_buyer: facet_reviewer_buyer,
+        facet_reviewer_recipient: facet_reviewer_recipient,
+        facet_reviewer_gifter: facet_reviewer_gifter,
+        facet_reviewer_sample: facet_reviewer_sample,
+        facet_rating_total: facet_rating_total,
+        facet_rating_5: facet_rating_5,
+        facet_rating_4: facet_rating_4,
+        facet_rating_3: facet_rating_3,
+        facet_rating_2: facet_rating_2,
+        facet_rating_1: facet_rating_1,
+        facet_color_count: facet_color_count,
+        facet_color_html: facet_color_html,
+        facet_owns_count: facet_owns_count,
+        facet_owns_html: facet_owns_html,
+        facet_photos: facet_photos,
+        facet_freq_daily: facet_freq_daily,
+        facet_freq_weekly: facet_freq_weekly,
+        facet_freq_occasionally: facet_freq_occasionally,
+        facet_carry_pocket: facet_carry_pocket,
+        facet_carry_bag: facet_carry_bag,
+        facet_carry_home: facet_carry_home,
+        facet_exp_veteran: facet_exp_veteran,
+        facet_exp_rookie: facet_exp_rookie
+      %}
+
+      <div class="reviews-page__main">
+        {% render 'reviews-cards-list',
+          scope_mode: scope_mode,
+          ctx_product_handle: ctx_product_handle,
+          ctx_product_id: ctx_product_id,
+          ctx_is_bundle: ctx_is_bundle,
+          ctx_bundle_tag: ctx_bundle_tag,
+          verified_buyer_label: verified_buyer_label,
+          gift_recipient_label: section.settings.gift_recipient_label,
+          gift_gifter_label: section.settings.gift_gifter_label,
+          sample_label: sample_label,
+          returns_label: returns_label,
+          photo_limit: photo_limit,
+          paginate_cards: true,
+          filterable: true
+        %}
+
+        <div class="reviews-page__sparse hidden" data-reviews-sparse>
+          <p class="reviews-page__sparse-message">Only 1 review matches these filters.</p>
+        </div>
+
+        <div class="reviews-page__empty hidden" data-reviews-empty>
+          <p class="reviews-page__empty-message">No reviews match these filters.</p>
+          <button type="button" class="button reviews-page__empty-clear" data-reviews-clear-filters>
+            Clear filters
+          </button>
+        </div>
+
+        <button type="button" class="reviews-page__load-more button button-secondary" data-reviews-load-more>
+          Load more
+        </button>
+      </div>
+    </div>
+
+    {% render 'reviews-filter-drawer',
+      ctx_show_owns_facet: ctx_show_owns_facet,
+      facet_reviewer_buyer: facet_reviewer_buyer,
+      facet_reviewer_recipient: facet_reviewer_recipient,
+      facet_reviewer_gifter: facet_reviewer_gifter,
+      facet_reviewer_sample: facet_reviewer_sample,
+      facet_rating_total: facet_rating_total,
+      facet_rating_5: facet_rating_5,
+      facet_rating_4: facet_rating_4,
+      facet_rating_3: facet_rating_3,
+      facet_rating_2: facet_rating_2,
+      facet_rating_1: facet_rating_1,
+      facet_color_count: facet_color_count,
+      facet_color_html: facet_color_html,
+      facet_owns_count: facet_owns_count,
+      facet_owns_html: facet_owns_html,
+      facet_photos: facet_photos,
+      facet_freq_daily: facet_freq_daily,
+      facet_freq_weekly: facet_freq_weekly,
+      facet_freq_occasionally: facet_freq_occasionally,
+      facet_carry_pocket: facet_carry_pocket,
+      facet_carry_bag: facet_carry_bag,
+      facet_carry_home: facet_carry_home,
+      facet_exp_veteran: facet_exp_veteran,
+      facet_exp_rookie: facet_exp_rookie
+    %}
+  {%- else -%}
+    {% render 'reviews-cards-list',
+      scope_mode: scope_mode,
+      ctx_product_handle: ctx_product_handle,
+      ctx_product_id: ctx_product_id,
+      ctx_is_bundle: ctx_is_bundle,
+      ctx_bundle_tag: ctx_bundle_tag,
+      verified_buyer_label: verified_buyer_label,
+      gift_recipient_label: section.settings.gift_recipient_label,
+      gift_gifter_label: section.settings.gift_gifter_label,
+      sample_label: sample_label,
+      returns_label: returns_label,
+      photo_limit: photo_limit
+    %}
+  {%- endif -%}
+</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Reviews surface",
+  "tag": "section",
+  "class": "reviews-section-surface",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        {
+          "value": "page-width",
+          "label": "t:options.page"
+        },
+        {
+          "value": "full-width",
+          "label": "t:options.full"
+        }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "select",
+      "id": "scope_mode",
+      "label": "Review scope",
+      "info": "Product: match reviews to the current PDP. Shop: all approved reviews (dev/test page).",
+      "options": [
+        {
+          "value": "product",
+          "label": "Current product"
+        },
+        {
+          "value": "shop",
+          "label": "All reviews (shop-wide)"
+        }
+      ],
+      "default": "product"
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_filters",
+      "label": "Enable filter sidebar and pagination",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "t:content.padding"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "text",
+      "id": "average_override",
+      "label": "Average override (acceptance test)",
+      "info": "e.g. 4.3 to verify fractional star gradient. Leave blank for computed average."
+    },
+    {
+      "type": "text",
+      "id": "caption_prefix",
+      "label": "Caption prefix",
+      "default": "From"
+    },
+    {
+      "type": "text",
+      "id": "verified_buyer_label",
+      "label": "Verified buyer tag",
+      "default": "Verified buyer"
+    },
+    {
+      "type": "text",
+      "id": "gift_recipient_label",
+      "label": "Gift recipient tag",
+      "default": "Gift recipient"
+    },
+    {
+      "type": "text",
+      "id": "gift_gifter_label",
+      "label": "Gift giver tag",
+      "default": "Gift giver"
+    },
+    {
+      "type": "text",
+      "id": "sample_label",
+      "label": "Sample tag",
+      "default": "Sample"
+    },
+    {
+      "type": "text",
+      "id": "returns_label",
+      "label": "Returns badge",
+      "default": "Order returned"
+    },
+    {
+      "type": "range",
+      "id": "photo_limit",
+      "label": "Photo limit per review",
+      "min": 1,
+      "max": 4,
+      "step": 1,
+      "default": 4
+    }
+  ],
+  "presets": [
+    {
+      "name": "Reviews surface"
+    }
+  ]
+}
+{% endschema %}

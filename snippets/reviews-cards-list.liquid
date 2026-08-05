@@ -1,0 +1,115 @@
+{%- doc -%}
+  M7 card list — product-scoped reviews with filter data attributes.
+  @param {string} scope_mode
+  @param {string} ctx_product_handle
+  @param {string} ctx_product_id
+  @param {boolean} ctx_is_bundle
+  @param {string} ctx_bundle_tag
+  @param {string} verified_buyer_label
+  @param {string} gift_recipient_label
+  @param {string} gift_gifter_label
+  @param {string} sample_label
+  @param {string} returns_label
+  @param {number} photo_limit
+  @param {boolean} [paginate_cards] - render only the sorted first page (M7).
+    The remaining pages are fetched on demand via cursor from /apps/reviews/cards.
+  @param {boolean} [filterable] - M8 click-to-filter triggers on cards
+{%- enddoc -%}
+
+{%- if paginate_cards -%}
+  {%- comment -%}
+    Server-rendered first page only. Cards are sorted Most-recent (submitted_at
+    desc) so the page-1 order matches the App Proxy default sort — the last card's
+    handle is the cursor the client passes to fetch page 2, with no reorder flash.
+  {%- endcomment -%}
+  {%- liquid
+    assign page_size = 10
+    assign sort_lines = ''
+    for review_entry in shop.metaobjects.review.values
+      if review_entry.status.value != 'approved'
+        continue
+      endif
+      capture match_result
+        render 'review-matches-page-product', review_entry: review_entry, scope_mode: scope_mode, ctx_product_handle: ctx_product_handle, ctx_product_id: ctx_product_id, ctx_is_bundle: ctx_is_bundle, ctx_bundle_tag: ctx_bundle_tag
+      endcapture
+      assign match_result = match_result | strip
+      if match_result != 'true'
+        continue
+      endif
+      assign sort_key = review_entry.submitted_at.value | default: ''
+      assign line = sort_key | append: '~' | append: review_entry.system.handle
+      if sort_lines == ''
+        assign sort_lines = line
+      else
+        assign sort_lines = sort_lines | append: '|||' | append: line
+      endif
+    endfor
+
+    assign sorted = sort_lines | split: '|||' | sort | reverse
+    assign page_lines = sorted | slice: 0, page_size
+  -%}
+  <div class="reviews-cards" data-reviews-cards>
+    {%- for line in page_lines -%}
+      {%- assign card_handle = line | split: '~' | last -%}
+      {%- assign review_entry = shop.metaobjects.review[card_handle] -%}
+      {%- if review_entry != blank -%}
+        <div
+          class="reviews-card-wrapper"
+          {% render 'review-card-data-attributes', review_entry: review_entry %}
+        >
+          {% render 'review-card-from-metaobject',
+            review_entry: review_entry,
+            verified_buyer_label: verified_buyer_label,
+            gift_recipient_label: gift_recipient_label,
+            gift_gifter_label: gift_gifter_label,
+            sample_label: sample_label,
+            returns_label: returns_label,
+            photo_limit: photo_limit,
+            filterable: filterable
+          %}
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  </div>
+
+{%- else -%}
+  {%- comment -%} Unpaginated (shop/test surface): render every matched card. {%- endcomment -%}
+  <div class="reviews-cards" data-reviews-cards>
+    {%- for review_entry in shop.metaobjects.review.values -%}
+      {%- if review_entry.status.value != 'approved' -%}
+        {%- continue -%}
+      {%- endif -%}
+
+      {%- capture match_result -%}
+        {% render 'review-matches-page-product',
+          review_entry: review_entry,
+          scope_mode: scope_mode,
+          ctx_product_handle: ctx_product_handle,
+          ctx_product_id: ctx_product_id,
+          ctx_is_bundle: ctx_is_bundle,
+          ctx_bundle_tag: ctx_bundle_tag
+        %}
+      {%- endcapture -%}
+      {%- assign match_result = match_result | strip -%}
+      {%- if match_result != 'true' -%}
+        {%- continue -%}
+      {%- endif -%}
+
+      <div
+        class="reviews-card-wrapper"
+        {% render 'review-card-data-attributes', review_entry: review_entry %}
+      >
+        {% render 'review-card-from-metaobject',
+          review_entry: review_entry,
+          verified_buyer_label: verified_buyer_label,
+          gift_recipient_label: gift_recipient_label,
+          gift_gifter_label: gift_gifter_label,
+          sample_label: sample_label,
+          returns_label: returns_label,
+          photo_limit: photo_limit,
+          filterable: filterable
+        %}
+      </div>
+    {%- endfor -%}
+  </div>
+{%- endif -%}

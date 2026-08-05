@@ -5,17 +5,20 @@
   @param {string} icon_type - fallback inline SVG when no outline_url
   @param {string} color_hex - variant color
   @param {string} [outline_url]
+  @param {string} [tooltip_label] - product title · variant color for hover/screen readers
 {%- enddoc -%}
 
 {%- liquid
   assign icon_type = icon_type | default: 'duggie'
   assign color_hex = color_hex | default: '#1F1F1E'
   assign outline_url = outline_url | strip
+  assign tooltip_label = tooltip_label | default: icon_type
 -%}
 
 <span
   class="reviews-card__own-icon{% if outline_url != blank %} reviews-card__own-icon--outline{% endif %}"
-  title="{{ icon_type }}"
+  title="{{ tooltip_label | escape }}"
+  aria-label="{{ tooltip_label | escape }}"
 >
   {%- if outline_url != blank -%}
     <span

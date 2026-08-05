@@ -1,0 +1,172 @@
+{{ 'reviews-components.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'reviews-form.js' | asset_url }}" defer></script>
+
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="section section--{{ section.settings.section_width }} color-{{ section.settings.color_scheme }} spacing-style reviews-surface reviews-surface--form section-{{ section.id }}"
+  style="{% render 'spacing-style', settings: section.settings %}"
+>
+  <div class="reviews-form-page">
+    <form
+      class="reviews-form"
+      data-reviews-form
+      data-reviewer-type="buyer"
+      novalidate
+    >
+      <h2 class="reviews-form__headline">Your story is what they need.</h2>
+
+      <div class="reviews-form__intro">
+        <p class="reviews-form__p1">
+          You bought one. You've used it, so you know what it actually feels like in your hand — what works, what could be better. The people considering one now are the same people you were a few weeks ago.
+        </p>
+        <p class="reviews-form__p2">
+          A few questions, a few sentences if you have them, photos if you took any — about ninety seconds. Reviews may have helped you decide, and now yours will help the next person decide. Thank you for taking the time.
+        </p>
+      </div>
+
+      <hr class="reviews-form__divider">
+
+      <div class="reviews-form__owns" data-reviews-owns hidden>
+        <p class="reviews-form__owns-label">Your order</p>
+        <ul class="reviews-form__owns-list" data-reviews-owns-list></ul>
+      </div>
+
+      <p class="reviews-form__session-error" data-reviews-session-error hidden>
+        This session has expired. Email
+        <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+        for a fresh link.
+      </p>
+
+      {% render 'review-form-stars-input' %}
+
+      {% render 'review-form-title-input' %}
+
+      <div class="reviews-form__dropdowns">
+        <div class="reviews-form__field">
+          <label class="reviews-form__label" for="how_often">How often you use it</label>
+          <select id="how_often" name="how_often" class="reviews-form__select" required data-reviews-field="how_often">
+            <option value="" disabled selected>Select…</option>
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Occasionally">Occasionally</option>
+          </select>
+          <p class="reviews-form__field-error" data-reviews-error="how_often" hidden>Required.</p>
+        </div>
+        <div class="reviews-form__field">
+          <label class="reviews-form__label" for="where_it_lives">Where it lives</label>
+          <select id="where_it_lives" name="where_it_lives" class="reviews-form__select" required data-reviews-field="where_it_lives">
+            <option value="" disabled selected>Select…</option>
+            <option value="Pocket">Pocket</option>
+            <option value="Bag">Bag</option>
+            <option value="Home">Home</option>
+          </select>
+          <p class="reviews-form__field-error" data-reviews-error="where_it_lives" hidden>Required.</p>
+        </div>
+        <div class="reviews-form__field">
+          <label class="reviews-form__label" for="dugout_experience">Dugout experience</label>
+          <select id="dugout_experience" name="dugout_experience" class="reviews-form__select" required data-reviews-field="dugout_experience">
+            <option value="" disabled selected>Select…</option>
+            <option value="Dugout veteran">Dugout veteran (used dugouts before)</option>
+            <option value="Dugout rookie">Dugout rookie (first time)</option>
+          </select>
+          <p class="reviews-form__field-error" data-reviews-error="dugout_experience" hidden>Required.</p>
+        </div>
+      </div>
+
+      <div class="reviews-form__field">
+        <label class="reviews-form__label" for="prose_1">What surprised you?</label>
+        <textarea
+          id="prose_1"
+          name="prose_1"
+          class="reviews-form__textarea"
+          rows="4"
+          required
+          data-reviews-prose
+          data-prompt-key="surprised"
+          data-label="What surprised you?"
+        ></textarea>
+        <p class="reviews-form__field-error" data-reviews-error="prose_1" hidden>Required.</p>
+      </div>
+
+      <div class="reviews-form__field">
+        <label class="reviews-form__label" for="prose_2">Anything you wish were different in the next version?</label>
+        <textarea
+          id="prose_2"
+          name="prose_2"
+          class="reviews-form__textarea"
+          rows="4"
+          data-reviews-prose
+          data-prompt-key="wish_different"
+          data-label="Anything you wish were different in the next version?"
+        ></textarea>
+      </div>
+
+      <div class="reviews-form__field">
+        <label class="reviews-form__label" for="prose_3">Anything else?</label>
+        <textarea
+          id="prose_3"
+          name="prose_3"
+          class="reviews-form__textarea"
+          rows="4"
+          data-reviews-prose
+          data-prompt-key="anything_else"
+          data-label="Anything else?"
+        ></textarea>
+      </div>
+
+      {% render 'review-form-photo-zone' %}
+
+      <button type="submit" class="reviews-form__submit" data-reviews-submit disabled>
+        Submit review
+      </button>
+      <p class="reviews-form__submit-error" data-reviews-submit-error hidden></p>
+    </form>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Review form — buyer",
+  "tag": "section",
+  "class": "reviews-section-form-buyer",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        { "value": "page-width", "label": "t:options.page" },
+        { "value": "full-width", "label": "t:options.full" }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    }
+  ],
+  "presets": [{ "name": "Review form — buyer" }]
+}
+{% endschema %}

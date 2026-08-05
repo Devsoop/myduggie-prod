@@ -1,0 +1,97 @@
+{%- comment -%}
+  M7 Section Rendering API fragment — card list only.
+  Used when JS re-fetches filtered HTML via ?section_id=reviews-list-fragment.
+{%- endcomment -%}
+
+{%- liquid
+  assign scope_mode = section.settings.scope_mode | default: 'product'
+  assign ctx_product_handle = ''
+  assign ctx_product_id = ''
+  assign ctx_is_bundle = false
+  assign ctx_bundle_tag = ''
+
+  if product != blank and scope_mode == 'product'
+    assign ctx_product_handle = product.handle
+    assign ctx_product_id = product.id | append: ''
+    case ctx_product_handle
+      when 'the-pair', 'the-complete-carry', 'the-home-kit'
+        assign ctx_is_bundle = true
+        assign ctx_bundle_tag = product.title | append: ':' | append: product.id
+    endcase
+  endif
+-%}
+
+{% render 'reviews-cards-list',
+  scope_mode: scope_mode,
+  ctx_product_handle: ctx_product_handle,
+  ctx_product_id: ctx_product_id,
+  ctx_is_bundle: ctx_is_bundle,
+  ctx_bundle_tag: ctx_bundle_tag,
+  verified_buyer_label: section.settings.verified_buyer_label,
+  gift_recipient_label: section.settings.gift_recipient_label,
+  gift_gifter_label: section.settings.gift_gifter_label,
+  sample_label: section.settings.sample_label,
+  returns_label: section.settings.returns_label,
+  photo_limit: section.settings.photo_limit,
+  paginate_cards: true,
+  filterable: true
+%}
+
+{% schema %}
+{
+  "name": "Reviews list fragment",
+  "class": "reviews-list-fragment",
+  "settings": [
+    {
+      "type": "select",
+      "id": "scope_mode",
+      "label": "Review scope",
+      "options": [
+        { "value": "product", "label": "Current product" },
+        { "value": "shop", "label": "All reviews" }
+      ],
+      "default": "product"
+    },
+    {
+      "type": "text",
+      "id": "verified_buyer_label",
+      "label": "Verified buyer tag",
+      "default": "Verified buyer"
+    },
+    {
+      "type": "text",
+      "id": "gift_recipient_label",
+      "label": "Gift recipient tag",
+      "default": "Gift recipient"
+    },
+    {
+      "type": "text",
+      "id": "gift_gifter_label",
+      "label": "Gift giver tag",
+      "default": "Gift giver"
+    },
+    {
+      "type": "text",
+      "id": "sample_label",
+      "label": "Sample tag",
+      "default": "Sample"
+    },
+    {
+      "type": "text",
+      "id": "returns_label",
+      "label": "Returns badge",
+      "default": "Order returned"
+    },
+    {
+      "type": "range",
+      "id": "photo_limit",
+      "label": "Photo limit",
+      "min": 1,
+      "max": 4,
+      "step": 1,
+      "default": 4
+    }
+  ],
+  "presets": [{ "name": "Reviews list fragment" }]
+}
+{% endschema %}

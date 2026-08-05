@@ -1,0 +1,142 @@
+{{ 'reviews-components.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'reviews-form.js' | asset_url }}" defer></script>
+
+<div class="section-background color-{{ section.settings.color_scheme }}"></div>
+<div
+  class="section section--{{ section.settings.section_width }} color-{{ section.settings.color_scheme }} spacing-style reviews-surface reviews-surface--form section-{{ section.id }}"
+  style="{% render 'spacing-style', settings: section.settings %}"
+>
+  <div class="reviews-form-page">
+    <form
+      class="reviews-form"
+      data-reviews-form
+      data-reviewer-type="gifter"
+      novalidate
+    >
+      <h2 class="reviews-form__headline">Your story is what they need.</h2>
+
+      <div class="reviews-form__intro">
+        <p class="reviews-form__p1">
+          You gave one as a gift. You chose the set, shared it with someone special, saw it land. Anyone considering this as a gift wants to know how that felt.
+        </p>
+        <p class="reviews-form__p2">
+          A few questions, a few sentences if you have them, photos if you took any — about a minute. Reviews may have helped you decide, and now yours will help the next person decide. Thank you for taking the time.
+        </p>
+      </div>
+
+      <hr class="reviews-form__divider">
+
+      <div class="reviews-form__owns" data-reviews-owns hidden>
+        <p class="reviews-form__owns-label">What you gifted</p>
+        <ul class="reviews-form__owns-list" data-reviews-owns-list></ul>
+      </div>
+
+      <p class="reviews-form__session-error" data-reviews-session-error hidden>
+        This session has expired. Email
+        <a href="mailto:support@myduggie.com">support@myduggie.com</a>
+        for a fresh link.
+      </p>
+
+      {% render 'review-form-stars-input' %}
+
+      {% render 'review-form-title-input' %}
+
+      <div class="reviews-form__field">
+        <label class="reviews-form__label" for="prose_1">How did the gift land?</label>
+        <textarea
+          id="prose_1"
+          name="prose_1"
+          class="reviews-form__textarea"
+          rows="4"
+          required
+          data-reviews-prose
+          data-prompt-key="gift_land"
+          data-label="How did the gift land?"
+        ></textarea>
+        <p class="reviews-form__field-error" data-reviews-error="prose_1" hidden>Required.</p>
+      </div>
+
+      <div class="reviews-form__field">
+        <label class="reviews-form__label" for="prose_2">How was the gift process?</label>
+        <textarea
+          id="prose_2"
+          name="prose_2"
+          class="reviews-form__textarea"
+          rows="4"
+          data-reviews-prose
+          data-prompt-key="gift_process"
+          data-label="How was the gift process?"
+        ></textarea>
+      </div>
+
+      <div class="reviews-form__field">
+        <label class="reviews-form__label" for="prose_3">Anything else?</label>
+        <textarea
+          id="prose_3"
+          name="prose_3"
+          class="reviews-form__textarea"
+          rows="4"
+          placeholder="Why you chose this gift, the occasion, the colors they chose — or whatever else feels worth sharing."
+          data-reviews-prose
+          data-prompt-key="anything_else"
+          data-label="Anything else? Why you chose this gift, the occasion, the colors they chose — or whatever else feels worth sharing."
+          data-display-label="Anything else?"
+        ></textarea>
+      </div>
+
+      {% render 'review-form-photo-zone' %}
+
+      <button type="submit" class="reviews-form__submit" data-reviews-submit disabled>
+        Submit review
+      </button>
+      <p class="reviews-form__submit-error" data-reviews-submit-error hidden></p>
+    </form>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "Review form — gifter",
+  "tag": "section",
+  "class": "reviews-section-form-gifter",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "t:settings.color_scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "select",
+      "id": "section_width",
+      "label": "t:settings.width",
+      "options": [
+        { "value": "page-width", "label": "t:options.page" },
+        { "value": "full-width", "label": "t:options.full" }
+      ],
+      "default": "page-width"
+    },
+    {
+      "type": "range",
+      "id": "padding-block-start",
+      "label": "t:settings.top",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "range",
+      "id": "padding-block-end",
+      "label": "t:settings.bottom",
+      "min": 0,
+      "max": 100,
+      "step": 1,
+      "unit": "px",
+      "default": 48
+    }
+  ],
+  "presets": [{ "name": "Review form — gifter" }]
+}
+{% endschema %}

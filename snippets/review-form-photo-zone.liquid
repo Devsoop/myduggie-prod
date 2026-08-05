@@ -1,0 +1,26 @@
+{%- doc -%}
+  Photo upload zone — optional, max 4 (§5.1).
+{%- enddoc -%}
+
+<div class="reviews-form__photos">
+  <div class="reviews-form__photo-zone" data-reviews-photo-zone tabindex="0">
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      class="reviews-form__photo-input visually-hidden"
+      data-reviews-photo-input
+      aria-label="Add photos"
+    >
+    <svg class="reviews-form__photo-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2"/>
+      <circle cx="8.5" cy="10.5" r="1.5"/>
+      <path d="M21 16l-5-5L5 20"/>
+      <path d="M14 8h6v6"/>
+    </svg>
+    <p class="reviews-form__photo-heading">Add photos</p>
+    <p class="reviews-form__photo-caption">Up to 4</p>
+  </div>
+  <ul class="reviews-form__photo-preview" data-reviews-photo-preview hidden></ul>
+  <p class="reviews-form__field-error" data-reviews-error="photos" hidden></p>
+</div>

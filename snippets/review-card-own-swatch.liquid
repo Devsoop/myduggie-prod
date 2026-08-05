@@ -1,0 +1,44 @@
+{%- doc -%}
+  One floating Owns swatch image (§4.6, M6). The actual variant swatch image —
+  the same image as the product page / order chip — floating on the card with no
+  tile, CDN-resized for retina. Source is the durable per-review snapshot URL or a
+  live catalog image (resolved by the caller).
+  @param {string} image_src - resized image URL
+  @param {string} tooltip_label - "Product · Color" for hover / screen readers
+  @param {string} [product_handle] - for M8 variant filter key
+  @param {string} [finish_key] - handleized finish for M8 variant filter key
+  @param {string} [filter_trigger] - variant | gave
+{%- enddoc -%}
+
+{%- liquid
+  assign tooltip_label = tooltip_label | strip
+  assign filter_trigger = filter_trigger | default: 'variant'
+  assign composite_key = ''
+  if product_handle != blank and finish_key != blank
+    assign composite_key = product_handle | append: ':' | append: finish_key
+  endif
+-%}
+
+{%- if image_src != blank -%}
+  {%- if composite_key != blank -%}
+    <button
+      type="button"
+      class="reviews-card__own-swatch reviews-card__filter-trigger reviews-card__filter-trigger--swatch"
+      data-reviews-filter-trigger="{{ filter_trigger | escape }}"
+      data-filter-value="{{ composite_key | escape }}"
+      data-filter-mode="add"
+      aria-label="Filter by {{ tooltip_label | escape }}"
+      aria-pressed="false"
+    >
+      <img src="{{ image_src }}" alt="" width="40" height="40" loading="lazy">
+    </button>
+  {%- else -%}
+    <span
+      class="reviews-card__own-swatch"
+      title="{{ tooltip_label | escape }}"
+      aria-label="{{ tooltip_label | escape }}"
+    >
+      <img src="{{ image_src }}" alt="{{ tooltip_label | escape }}" width="40" height="40" loading="lazy">
+    </span>
+  {%- endif -%}
+{%- endif -%}

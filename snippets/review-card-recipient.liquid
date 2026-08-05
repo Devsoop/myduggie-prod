@@ -1,0 +1,35 @@
+{%- doc -%}
+  §5.7 Recipient Review Card — same structure as buyer; pill + prose labels come from stored data.
+{%- enddoc -%}
+
+{% render 'review-card-buyer',
+  review_id: review_id,
+  review_title: review_title,
+  rating: rating,
+  reviewer_first: reviewer_first,
+  reviewer_last: reviewer_last,
+  submitted_at: submitted_at,
+  order_returned: order_returned,
+  reviewer_pill_icon: reviewer_pill_icon,
+  reviewer_pill_label: reviewer_pill_label,
+  is_sample: is_sample,
+  how_often: how_often,
+  where_it_lives: where_it_lives,
+  dugout_experience: dugout_experience,
+  photo_count: photo_count,
+  photos: photos,
+  owns_icon_count: owns_icon_count,
+  ownership: ownership,
+  prose_1_label: prose_1_label,
+  prose_1_body: prose_1_body,
+  prose_2_label: prose_2_label,
+  prose_2_body: prose_2_body,
+  prose_3_label: prose_3_label,
+  prose_3_body: prose_3_body,
+  verified_buyer_label: verified_buyer_label,
+  sample_label: sample_label,
+  returns_label: returns_label,
+  photo_limit: photo_limit,
+  filterable: filterable,
+  reviewer_filter_value: reviewer_filter_value
+%}

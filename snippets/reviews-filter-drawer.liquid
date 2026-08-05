@@ -1,0 +1,98 @@
+{%- doc -%}
+  M8 mobile filter drawer — bottom sheet with draft checkboxes + Apply / Clear.
+  Draft inputs use data-reviews-drawer-filter so desktop live filters stay authoritative.
+{%- enddoc -%}
+
+{%- capture drawer_facets -%}
+  {% render 'reviews-filter-facets',
+    id_prefix: 'df',
+    ctx_show_owns_facet: ctx_show_owns_facet,
+    facet_reviewer_buyer: facet_reviewer_buyer,
+    facet_reviewer_recipient: facet_reviewer_recipient,
+    facet_reviewer_gifter: facet_reviewer_gifter,
+    facet_reviewer_sample: facet_reviewer_sample,
+    facet_rating_total: facet_rating_total,
+    facet_rating_5: facet_rating_5,
+    facet_rating_4: facet_rating_4,
+    facet_rating_3: facet_rating_3,
+    facet_rating_2: facet_rating_2,
+    facet_rating_1: facet_rating_1,
+    facet_color_count: facet_color_count,
+    color_html: facet_color_html,
+    facet_owns_count: facet_owns_count,
+    owns_html: facet_owns_html,
+    facet_photos: facet_photos,
+    facet_freq_daily: facet_freq_daily,
+    facet_freq_weekly: facet_freq_weekly,
+    facet_freq_occasionally: facet_freq_occasionally,
+    facet_carry_pocket: facet_carry_pocket,
+    facet_carry_bag: facet_carry_bag,
+    facet_carry_home: facet_carry_home,
+    facet_exp_veteran: facet_exp_veteran,
+    facet_exp_rookie: facet_exp_rookie
+  %}
+{%- endcapture -%}
+{%- assign drawer_facets = drawer_facets | replace: 'data-reviews-filter=', 'data-reviews-drawer-filter=' -%}
+
+<div
+  id="reviews-filter-drawer"
+  class="reviews-filter-drawer"
+  data-reviews-filter-drawer
+  hidden
+>
+  <div class="reviews-filter-drawer__overlay" data-reviews-drawer-overlay tabindex="-1"></div>
+  <div
+    class="reviews-filter-drawer__sheet"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="reviews-filter-drawer-title"
+    data-reviews-drawer-sheet
+  >
+    <div class="reviews-filter-drawer__header">
+      <h2 id="reviews-filter-drawer-title" class="reviews-filter-drawer__title">Filter</h2>
+      <button
+        type="button"
+        class="reviews-filter-drawer__close"
+        data-reviews-drawer-close
+        aria-label="Close filters"
+      >
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+
+    <div class="reviews-filter-drawer__body reviews-filter reviews-filter--drawer">
+      {{ drawer_facets }}
+    </div>
+
+    <div class="reviews-filter-drawer__footer">
+      <button
+        type="button"
+        class="button button-secondary reviews-filter-drawer__clear"
+        data-reviews-drawer-clear
+      >
+        Clear
+      </button>
+      <button
+        type="button"
+        class="button reviews-filter-drawer__apply"
+        data-reviews-drawer-apply
+      >
+        Apply
+      </button>
+    </div>
+  </div>
+</div>
+
+<button
+  type="button"
+  class="reviews-filter-fab"
+  data-reviews-open-filter
+  aria-haspopup="dialog"
+  aria-controls="reviews-filter-drawer"
+  aria-label="Filter"
+  hidden
+  aria-hidden="true"
+>
+  <span class="reviews-filter-fab__label">Filter</span>
+  <span class="reviews-filter-fab__badge hidden" data-reviews-filter-badge aria-hidden="true">0</span>
+</button>

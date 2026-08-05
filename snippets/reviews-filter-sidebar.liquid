@@ -1,0 +1,36 @@
+{%- doc -%}
+  M7 desktop filter sidebar (§4.6). Live checkboxes — no Apply on desktop.
+  Facet counts passed from parent loop; options with zero count are omitted.
+{%- enddoc -%}
+
+<aside class="reviews-page__sidebar" data-reviews-sidebar aria-label="Filter reviews">
+  <div class="reviews-filter">
+    {% render 'reviews-filter-facets',
+      id_prefix: 'sf',
+      ctx_show_owns_facet: ctx_show_owns_facet,
+      facet_reviewer_buyer: facet_reviewer_buyer,
+      facet_reviewer_recipient: facet_reviewer_recipient,
+      facet_reviewer_gifter: facet_reviewer_gifter,
+      facet_reviewer_sample: facet_reviewer_sample,
+      facet_rating_total: facet_rating_total,
+      facet_rating_5: facet_rating_5,
+      facet_rating_4: facet_rating_4,
+      facet_rating_3: facet_rating_3,
+      facet_rating_2: facet_rating_2,
+      facet_rating_1: facet_rating_1,
+      facet_color_count: facet_color_count,
+      color_html: facet_color_html,
+      facet_owns_count: facet_owns_count,
+      owns_html: facet_owns_html,
+      facet_photos: facet_photos,
+      facet_freq_daily: facet_freq_daily,
+      facet_freq_weekly: facet_freq_weekly,
+      facet_freq_occasionally: facet_freq_occasionally,
+      facet_carry_pocket: facet_carry_pocket,
+      facet_carry_bag: facet_carry_bag,
+      facet_carry_home: facet_carry_home,
+      facet_exp_veteran: facet_exp_veteran,
+      facet_exp_rookie: facet_exp_rookie
+    %}
+  </div>
+</aside>

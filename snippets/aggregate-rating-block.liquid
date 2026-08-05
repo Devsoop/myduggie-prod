@@ -6,6 +6,7 @@
   @param {number} count_5 … count_1
   @param {string} [caption_prefix]
   @param {string} [unique_id]
+  @param {boolean} [filterable] - M8: distribution bars filter by rating
 {%- enddoc -%}
 
 {%- assign unique_id = unique_id | default: 'aggregate-block' -%}
@@ -19,6 +20,7 @@
   assign count_2 = count_2 | default: 0 | plus: 0
   assign count_1 = count_1 | default: 0 | plus: 0
   assign caption_prefix = caption_prefix | default: 'From'
+  assign filterable = filterable | default: false
 
   assign max_count = count_5
   if count_4 > max_count
@@ -49,55 +51,115 @@
 <div class="reviews-aggregate__grid">
   <div class="reviews-aggregate__summary">
     <p class="reviews-aggregate__score">{{ average_display }}</p>
-    {% render 'review-stars-aggregate', average: average, unique_id: unique_id %}
-    <p class="reviews-aggregate__caption">{{ caption_prefix }} {{ total_count }} reviews</p>
+    {% render 'review-stars-aggregate', average: average_display, unique_id: unique_id %}
+    <p class="reviews-aggregate__caption">
+      {%- if total_count == 1 -%}
+        {{ caption_prefix }} 1 review
+      {%- else -%}
+        {{ caption_prefix }} {{ total_count }} reviews
+      {%- endif -%}
+    </p>
   </div>
 
   <div class="reviews-aggregate__distribution" role="list">
-    <div class="reviews-aggregate__row" role="listitem">
-      <span class="reviews-aggregate__row-label">5 ★</span>
-      <div class="reviews-aggregate__bar-cell">
-        {%- if count_5 > 0 -%}
+    {%- if filterable and count_5 > 0 -%}
+      <button type="button" class="reviews-aggregate__row reviews-aggregate__row--filterable reviews-card__filter-trigger" role="listitem" data-reviews-filter-trigger="rating" data-filter-value="5" data-filter-mode="replace" aria-label="Filter to 5 star reviews" aria-pressed="false">
+        <span class="reviews-aggregate__row-label">5 ★</span>
+        <div class="reviews-aggregate__bar-cell">
           <span class="reviews-aggregate__bar-fill" style="width: {{ pct_5 }}%;"></span>
-        {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_5 }}</span>
+      </button>
+    {%- else -%}
+      <div class="reviews-aggregate__row" role="listitem">
+        <span class="reviews-aggregate__row-label">5 ★</span>
+        <div class="reviews-aggregate__bar-cell">
+          {%- if count_5 > 0 -%}
+            <span class="reviews-aggregate__bar-fill" style="width: {{ pct_5 }}%;"></span>
+          {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_5 }}</span>
       </div>
-      <span class="reviews-aggregate__row-count">{{ count_5 }}</span>
-    </div>
-    <div class="reviews-aggregate__row" role="listitem">
-      <span class="reviews-aggregate__row-label">4 ★</span>
-      <div class="reviews-aggregate__bar-cell">
-        {%- if count_4 > 0 -%}
+    {%- endif -%}
+
+    {%- if filterable and count_4 > 0 -%}
+      <button type="button" class="reviews-aggregate__row reviews-aggregate__row--filterable reviews-card__filter-trigger" role="listitem" data-reviews-filter-trigger="rating" data-filter-value="4" data-filter-mode="replace" aria-label="Filter to 4 star reviews" aria-pressed="false">
+        <span class="reviews-aggregate__row-label">4 ★</span>
+        <div class="reviews-aggregate__bar-cell">
           <span class="reviews-aggregate__bar-fill" style="width: {{ pct_4 }}%;"></span>
-        {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_4 }}</span>
+      </button>
+    {%- else -%}
+      <div class="reviews-aggregate__row" role="listitem">
+        <span class="reviews-aggregate__row-label">4 ★</span>
+        <div class="reviews-aggregate__bar-cell">
+          {%- if count_4 > 0 -%}
+            <span class="reviews-aggregate__bar-fill" style="width: {{ pct_4 }}%;"></span>
+          {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_4 }}</span>
       </div>
-      <span class="reviews-aggregate__row-count">{{ count_4 }}</span>
-    </div>
-    <div class="reviews-aggregate__row" role="listitem">
-      <span class="reviews-aggregate__row-label">3 ★</span>
-      <div class="reviews-aggregate__bar-cell">
-        {%- if count_3 > 0 -%}
+    {%- endif -%}
+
+    {%- if filterable and count_3 > 0 -%}
+      <button type="button" class="reviews-aggregate__row reviews-aggregate__row--filterable reviews-card__filter-trigger" role="listitem" data-reviews-filter-trigger="rating" data-filter-value="3" data-filter-mode="replace" aria-label="Filter to 3 star reviews" aria-pressed="false">
+        <span class="reviews-aggregate__row-label">3 ★</span>
+        <div class="reviews-aggregate__bar-cell">
           <span class="reviews-aggregate__bar-fill" style="width: {{ pct_3 }}%;"></span>
-        {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_3 }}</span>
+      </button>
+    {%- else -%}
+      <div class="reviews-aggregate__row" role="listitem">
+        <span class="reviews-aggregate__row-label">3 ★</span>
+        <div class="reviews-aggregate__bar-cell">
+          {%- if count_3 > 0 -%}
+            <span class="reviews-aggregate__bar-fill" style="width: {{ pct_3 }}%;"></span>
+          {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_3 }}</span>
       </div>
-      <span class="reviews-aggregate__row-count">{{ count_3 }}</span>
-    </div>
-    <div class="reviews-aggregate__row" role="listitem">
-      <span class="reviews-aggregate__row-label">2 ★</span>
-      <div class="reviews-aggregate__bar-cell">
-        {%- if count_2 > 0 -%}
+    {%- endif -%}
+
+    {%- if filterable and count_2 > 0 -%}
+      <button type="button" class="reviews-aggregate__row reviews-aggregate__row--filterable reviews-card__filter-trigger" role="listitem" data-reviews-filter-trigger="rating" data-filter-value="2" data-filter-mode="replace" aria-label="Filter to 2 star reviews" aria-pressed="false">
+        <span class="reviews-aggregate__row-label">2 ★</span>
+        <div class="reviews-aggregate__bar-cell">
           <span class="reviews-aggregate__bar-fill" style="width: {{ pct_2 }}%;"></span>
-        {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_2 }}</span>
+      </button>
+    {%- else -%}
+      <div class="reviews-aggregate__row" role="listitem">
+        <span class="reviews-aggregate__row-label">2 ★</span>
+        <div class="reviews-aggregate__bar-cell">
+          {%- if count_2 > 0 -%}
+            <span class="reviews-aggregate__bar-fill" style="width: {{ pct_2 }}%;"></span>
+          {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_2 }}</span>
       </div>
-      <span class="reviews-aggregate__row-count">{{ count_2 }}</span>
-    </div>
-    <div class="reviews-aggregate__row" role="listitem">
-      <span class="reviews-aggregate__row-label">1 ★</span>
-      <div class="reviews-aggregate__bar-cell">
-        {%- if count_1 > 0 -%}
+    {%- endif -%}
+
+    {%- if filterable and count_1 > 0 -%}
+      <button type="button" class="reviews-aggregate__row reviews-aggregate__row--filterable reviews-card__filter-trigger" role="listitem" data-reviews-filter-trigger="rating" data-filter-value="1" data-filter-mode="replace" aria-label="Filter to 1 star reviews" aria-pressed="false">
+        <span class="reviews-aggregate__row-label">1 ★</span>
+        <div class="reviews-aggregate__bar-cell">
           <span class="reviews-aggregate__bar-fill" style="width: {{ pct_1 }}%;"></span>
-        {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_1 }}</span>
+      </button>
+    {%- else -%}
+      <div class="reviews-aggregate__row" role="listitem">
+        <span class="reviews-aggregate__row-label">1 ★</span>
+        <div class="reviews-aggregate__bar-cell">
+          {%- if count_1 > 0 -%}
+            <span class="reviews-aggregate__bar-fill" style="width: {{ pct_1 }}%;"></span>
+          {%- endif -%}
+        </div>
+        <span class="reviews-aggregate__row-count">{{ count_1 }}</span>
       </div>
-      <span class="reviews-aggregate__row-count">{{ count_1 }}</span>
-    </div>
+    {%- endif -%}
   </div>
 </div>

@@ -1,0 +1,38 @@
+{%- doc -%}
+  Interactive whole-star rating input (§5.1). 26px stars, tertiary until selected.
+{%- enddoc -%}
+
+<div class="reviews-form__rating">
+  <p class="reviews-form__label" id="reviews-rating-label">Your rating</p>
+  <div
+    class="reviews-form__stars-input"
+    role="radiogroup"
+    aria-labelledby="reviews-rating-label"
+    data-reviews-stars
+  >
+    {%- for i in (1..5) -%}
+      <button
+        type="button"
+        class="reviews-form__star-btn"
+        data-star-value="{{ i }}"
+        aria-label="{{ i }} star{% if i != 1 %}s{% endif %}"
+        aria-pressed="false"
+      >
+        <svg
+          class="reviews-form__star-icon"
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          aria-hidden="true"
+        >
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+      </button>
+    {%- endfor -%}
+  </div>
+  <input type="hidden" name="rating" value="" data-reviews-rating-input required>
+  <p class="reviews-form__field-error" data-reviews-error="rating" hidden>Select a star rating.</p>
+</div>

@@ -1,0 +1,51 @@
+{%- doc -%}
+  Returns "true" or "false" — whether a review metaobject belongs on the current page.
+  @param {object} review_entry
+  @param {string} scope_mode - 'product' | 'shop'
+  @param {string} ctx_product_handle
+  @param {string} ctx_product_id
+  @param {boolean} ctx_is_bundle
+  @param {string} ctx_bundle_tag
+{%- enddoc -%}
+
+{%- liquid
+  assign matches = false
+  assign scope_mode = scope_mode | default: 'product'
+
+  if scope_mode == 'shop'
+    assign matches = true
+  elsif ctx_is_bundle
+    assign acquisition = review_entry.acquisition.value
+    if acquisition.bundles != blank
+      for bundle in acquisition.bundles
+        assign bundle_tag = bundle.tag | default: ''
+        if bundle_tag == ctx_bundle_tag
+          assign matches = true
+          break
+        endif
+        assign tag_suffix = ':' | append: ctx_product_id
+        if bundle_tag contains tag_suffix
+          assign matches = true
+          break
+        endif
+      endfor
+    endif
+  elsif ctx_product_handle != blank
+    assign ownership = review_entry.ownership.value
+    if ownership != blank
+      for group in ownership
+        assign group_handle = group.product_handle | default: ''
+        if group_handle == ctx_product_handle
+          assign matches = true
+          break
+        endif
+        assign group_pid = group.product_id | split: '/' | last
+        if group_pid == ctx_product_id
+          assign matches = true
+          break
+        endif
+      endfor
+    endif
+  endif
+-%}
+{{- matches -}}

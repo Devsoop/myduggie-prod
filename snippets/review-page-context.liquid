@@ -1,0 +1,29 @@
+{%- doc -%}
+  M7 page context for product-scoped reviews (§5.10).
+  Sets ctx_* variables for bundle vs single-product PDP matching.
+  @param {object} [product] - Current product (defaults to global product)
+  @param {string} [scope_mode] - 'product' | 'shop'
+{%- enddoc -%}
+
+{%- liquid
+  assign scope_mode = scope_mode | default: 'product'
+  assign ctx_product = product
+  assign ctx_product_handle = ''
+  assign ctx_product_id = ''
+  assign ctx_is_bundle = false
+  assign ctx_bundle_tag = ''
+  assign ctx_show_owns_facet = false
+
+  if ctx_product != blank and scope_mode == 'product'
+    assign ctx_product_handle = ctx_product.handle
+    assign ctx_product_id = ctx_product.id | append: ''
+
+    case ctx_product_handle
+      when 'the-pair', 'the-complete-carry', 'the-home-kit'
+        assign ctx_is_bundle = true
+        assign ctx_bundle_tag = ctx_product.title | append: ':' | append: ctx_product.id
+      else
+        assign ctx_show_owns_facet = true
+    endcase
+  endif
+-%}

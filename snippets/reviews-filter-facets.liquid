@@ -1,0 +1,374 @@
+{%- doc -%}
+  Shared filter facet sections (§4.6) for desktop sidebar and mobile drawer.
+  Always emits data-reviews-filter; drawer callers rewrite to data-reviews-drawer-filter.
+  @param {string} [id_prefix] - prefix for input ids (avoids duplicates when both surfaces render)
+  @param {string} [color_html] - prebuilt color facet rows
+  @param {string} [owns_html] - prebuilt owns facet rows
+{%- enddoc -%}
+
+{%- liquid
+  assign id_prefix = id_prefix | default: 'sf'
+  assign color_rows = color_html | default: facet_color_html | default: ''
+  assign owns_rows = owns_html | default: facet_owns_html | default: ''
+-%}
+
+{%- if facet_reviewer_buyer > 0 or facet_reviewer_recipient > 0 or facet_reviewer_gifter > 0 or facet_reviewer_sample > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="reviewer" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Reviewer</summary>
+    <ul class="reviews-filter__list list-unstyled">
+      {%- if facet_reviewer_buyer > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-reviewer-buyer">
+            <input
+              id="{{ id_prefix }}-reviewer-buyer"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="reviewer"
+              value="buyer"
+              data-reviews-filter="reviewer"
+            >
+            <span>Verified buyers</span>
+            <span class="reviews-filter__count">({{ facet_reviewer_buyer }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_reviewer_recipient > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-reviewer-recipient">
+            <input
+              id="{{ id_prefix }}-reviewer-recipient"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="reviewer"
+              value="recipient"
+              data-reviews-filter="reviewer"
+            >
+            <span>Gift recipients</span>
+            <span class="reviews-filter__count">({{ facet_reviewer_recipient }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_reviewer_gifter > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-reviewer-gifter">
+            <input
+              id="{{ id_prefix }}-reviewer-gifter"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="reviewer"
+              value="gifter"
+              data-reviews-filter="reviewer"
+            >
+            <span>Gift givers</span>
+            <span class="reviews-filter__count">({{ facet_reviewer_gifter }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_reviewer_sample > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-reviewer-sample">
+            <input
+              id="{{ id_prefix }}-reviewer-sample"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="reviewer"
+              value="sample"
+              data-reviews-filter="reviewer"
+            >
+            <span>Samples</span>
+            <span class="reviews-filter__count">({{ facet_reviewer_sample }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if facet_color_count > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="color" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Color</summary>
+    <ul class="reviews-filter__list reviews-filter__list--swatches list-unstyled" data-reviews-color-list>
+      {{ color_rows }}
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if facet_rating_total > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="rating" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Rating</summary>
+    <ul class="reviews-filter__list list-unstyled">
+      {%- if facet_rating_5 > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-rating-5">
+            <input
+              id="{{ id_prefix }}-rating-5"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="rating"
+              value="5"
+              data-reviews-filter="rating"
+            >
+            <span>5★</span>
+            <span class="reviews-filter__count">({{ facet_rating_5 }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_rating_4 > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-rating-4">
+            <input
+              id="{{ id_prefix }}-rating-4"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="rating"
+              value="4"
+              data-reviews-filter="rating"
+            >
+            <span>4★</span>
+            <span class="reviews-filter__count">({{ facet_rating_4 }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_rating_3 > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-rating-3">
+            <input
+              id="{{ id_prefix }}-rating-3"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="rating"
+              value="3"
+              data-reviews-filter="rating"
+            >
+            <span>3★</span>
+            <span class="reviews-filter__count">({{ facet_rating_3 }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_rating_2 > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-rating-2">
+            <input
+              id="{{ id_prefix }}-rating-2"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="rating"
+              value="2"
+              data-reviews-filter="rating"
+            >
+            <span>2★</span>
+            <span class="reviews-filter__count">({{ facet_rating_2 }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_rating_1 > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-rating-1">
+            <input
+              id="{{ id_prefix }}-rating-1"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="rating"
+              value="1"
+              data-reviews-filter="rating"
+            >
+            <span>1★</span>
+            <span class="reviews-filter__count">({{ facet_rating_1 }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if ctx_show_owns_facet and facet_owns_count > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="owns" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Owns</summary>
+    <p class="reviews-filter__subtext">owns all selected</p>
+    <ul class="reviews-filter__list list-unstyled">
+      {{ owns_rows }}
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if facet_photos > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="photos" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Photos</summary>
+    <ul class="reviews-filter__list list-unstyled">
+      <li class="reviews-filter__item">
+        <label class="reviews-filter__label" for="{{ id_prefix }}-photos">
+          <input
+            id="{{ id_prefix }}-photos"
+            type="checkbox"
+            class="reviews-filter__input"
+            name="photos"
+            value="1"
+            data-reviews-filter="photos"
+          >
+          <span>With photos only</span>
+          <span class="reviews-filter__count">({{ facet_photos }})</span>
+        </label>
+      </li>
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if facet_freq_daily > 0 or facet_freq_weekly > 0 or facet_freq_occasionally > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="frequency" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Usage Frequency</summary>
+    <ul class="reviews-filter__list list-unstyled">
+      {%- if facet_freq_daily > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-freq-daily">
+            <input
+              id="{{ id_prefix }}-freq-daily"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="frequency"
+              value="Daily"
+              data-reviews-filter="frequency"
+              data-option-label="Daily user"
+            >
+            <span>Daily user</span>
+            <span class="reviews-filter__count">({{ facet_freq_daily }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_freq_weekly > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-freq-weekly">
+            <input
+              id="{{ id_prefix }}-freq-weekly"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="frequency"
+              value="Weekly"
+              data-reviews-filter="frequency"
+              data-option-label="Weekly user"
+            >
+            <span>Weekly user</span>
+            <span class="reviews-filter__count">({{ facet_freq_weekly }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_freq_occasionally > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-freq-occasional">
+            <input
+              id="{{ id_prefix }}-freq-occasional"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="frequency"
+              value="Occasionally"
+              data-reviews-filter="frequency"
+              data-option-label="Occasional user"
+            >
+            <span>Occasional user</span>
+            <span class="reviews-filter__count">({{ facet_freq_occasionally }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if facet_carry_pocket > 0 or facet_carry_bag > 0 or facet_carry_home > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="carry" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Carry Method</summary>
+    <ul class="reviews-filter__list list-unstyled">
+      {%- if facet_carry_pocket > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-carry-pocket">
+            <input
+              id="{{ id_prefix }}-carry-pocket"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="carry"
+              value="Pocket"
+              data-reviews-filter="carry"
+              data-option-label="Pocket carry"
+            >
+            <span>Pocket carry</span>
+            <span class="reviews-filter__count">({{ facet_carry_pocket }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_carry_bag > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-carry-bag">
+            <input
+              id="{{ id_prefix }}-carry-bag"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="carry"
+              value="Bag"
+              data-reviews-filter="carry"
+              data-option-label="Bag carry"
+            >
+            <span>Bag carry</span>
+            <span class="reviews-filter__count">({{ facet_carry_bag }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_carry_home > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-carry-home">
+            <input
+              id="{{ id_prefix }}-carry-home"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="carry"
+              value="Home"
+              data-reviews-filter="carry"
+              data-option-label="Home use"
+            >
+            <span>Home use</span>
+            <span class="reviews-filter__count">({{ facet_carry_home }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+    </ul>
+  </details>
+{%- endif -%}
+
+{%- if facet_exp_veteran > 0 or facet_exp_rookie > 0 -%}
+  <details class="reviews-filter__details" data-reviews-filter-section="experience" open>
+    <summary class="reviews-filter__heading reviews-filter__summary">Experience Level</summary>
+    <ul class="reviews-filter__list list-unstyled">
+      {%- if facet_exp_veteran > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-exp-veteran">
+            <input
+              id="{{ id_prefix }}-exp-veteran"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="experience"
+              value="Dugout veteran"
+              data-reviews-filter="experience"
+              data-option-label="Dugout veteran"
+            >
+            <span>Dugout veteran</span>
+            <span class="reviews-filter__count">({{ facet_exp_veteran }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+      {%- if facet_exp_rookie > 0 -%}
+        <li class="reviews-filter__item">
+          <label class="reviews-filter__label" for="{{ id_prefix }}-exp-rookie">
+            <input
+              id="{{ id_prefix }}-exp-rookie"
+              type="checkbox"
+              class="reviews-filter__input"
+              name="experience"
+              value="Dugout rookie"
+              data-reviews-filter="experience"
+              data-option-label="Dugout rookie"
+            >
+            <span>Dugout rookie</span>
+            <span class="reviews-filter__count">({{ facet_exp_rookie }})</span>
+          </label>
+        </li>
+      {%- endif -%}
+    </ul>
+  </details>
+{%- endif -%}

@@ -1,0 +1,16 @@
+{
+  "sections": {
+    "main": {
+      "type": "review-link-inactive",
+      "settings": {
+        "color_scheme": "scheme-1",
+        "section_width": "page-width",
+        "padding-block-start": 48,
+        "padding-block-end": 48,
+        "preview_state": ""
+      }
+    }
+  },
+  "order": ["main"]
+}
+
