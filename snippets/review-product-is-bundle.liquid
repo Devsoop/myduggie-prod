@@ -1,0 +1,36 @@
+{%- doc -%}
+  Returns "true" or "false" — whether the current product is a bundle PDP.
+
+  Catalog signals only (prod / product-agnostic):
+  1. product.type == "Bundle" (smart collection rule on gifts-and-bundles)
+  2. custom.constituent_items has at least one product reference
+  3. template.suffix == "bundle" (generic bundle product template)
+
+  Do NOT use custom.review_category here — that field is core|accessory for
+  email routing only. Do NOT hardcode product handles.
+
+  @param {object} product
+{%- enddoc -%}
+{%- liquid
+  assign is_bundle = false
+
+  if product != blank
+    assign type_down = product.type | downcase | strip
+    if type_down == 'bundle'
+      assign is_bundle = true
+    endif
+
+    assign constituents = product.metafields.custom.constituent_items.value
+    if constituents == blank
+      assign constituents = product.metafields.custom.constituent_items
+    endif
+    if constituents != blank and constituents.size > 0
+      assign is_bundle = true
+    endif
+
+    if template.suffix == 'bundle'
+      assign is_bundle = true
+    endif
+  endif
+-%}
+{{- is_bundle -}}

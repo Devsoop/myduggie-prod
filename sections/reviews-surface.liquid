@@ -21,6 +21,7 @@
 
   assign ctx_product_handle = ''
   assign ctx_product_id = ''
+  assign ctx_product_type = ''
   assign ctx_is_bundle = false
   assign ctx_bundle_tag = ''
   assign ctx_show_owns_facet = false
@@ -29,20 +30,20 @@
   if product != blank and scope_mode == 'product'
     assign ctx_product_handle = product.handle
     assign ctx_product_id = product.id | append: ''
+    assign ctx_product_type = product.type | strip
+    # core|accessory for email routing only — never the PDP bundle gate
     assign ctx_review_category = product.metafields.custom.review_category.value | downcase | strip
 
-    # Catalog signal decides. The handle list below is only a fallback for
-    # products that predate the metafield — new products set the field instead.
-    if ctx_review_category == 'bundle'
+    capture ctx_is_bundle_str
+      render 'review-product-is-bundle', product: product
+    endcapture
+    assign ctx_is_bundle_str = ctx_is_bundle_str | strip
+    if ctx_is_bundle_str == 'true'
       assign ctx_is_bundle = true
-    elsif ctx_review_category == blank
-      case ctx_product_handle
-        when 'the-pair', 'the-complete-carry', 'the-home-kit'
-          assign ctx_is_bundle = true
-      endcase
     endif
 
     if ctx_is_bundle
+      # Must match bundle-configurator.js: `${productTitle}:${productId}`
       assign ctx_bundle_tag = product.title | append: ':' | append: product.id
     else
       assign ctx_show_owns_facet = true
@@ -525,6 +526,7 @@
   data-product-handle="{{ ctx_product_handle | escape }}"
   data-product-id="{{ ctx_product_id | escape }}"
   data-product-title="{{ product.title | escape }}"
+  data-product-type="{{ ctx_product_type | escape }}"
   data-is-bundle="{{ ctx_is_bundle }}"
   data-review-category="{{ ctx_review_category | escape }}"
   data-show-owns-facet="{{ ctx_show_owns_facet }}"

@@ -13,11 +13,15 @@
   if product != blank and scope_mode == 'product'
     assign ctx_product_handle = product.handle
     assign ctx_product_id = product.id | append: ''
-    case ctx_product_handle
-      when 'the-pair', 'the-complete-carry', 'the-home-kit'
-        assign ctx_is_bundle = true
-        assign ctx_bundle_tag = product.title | append: ':' | append: product.id
-    endcase
+
+    capture ctx_is_bundle_str
+      render 'review-product-is-bundle', product: product
+    endcapture
+    assign ctx_is_bundle_str = ctx_is_bundle_str | strip
+    if ctx_is_bundle_str == 'true'
+      assign ctx_is_bundle = true
+      assign ctx_bundle_tag = product.title | append: ':' | append: product.id
+    endif
   endif
 -%}
 

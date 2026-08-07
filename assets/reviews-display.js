@@ -704,8 +704,11 @@
       params.set('scope', root.dataset.scopeMode || 'product');
       if (root.dataset.productHandle) params.set('product_handle', root.dataset.productHandle);
       if (root.dataset.productId) params.set('product_id', root.dataset.productId);
-      if (root.dataset.reviewCategory) params.set('review_category', root.dataset.reviewCategory);
       if (root.dataset.productTitle) params.set('product_title', root.dataset.productTitle);
+      if (root.dataset.productType) params.set('product_type', root.dataset.productType);
+      // Theme resolves bundle via type / constituent_items / suffix — not review_category
+      if (root.dataset.isBundle === 'true') params.set('is_bundle', 'true');
+      else if (root.dataset.isBundle === 'false') params.set('is_bundle', 'false');
       params.set('limit', String(pageSize));
       params.set('sort', readSort());
 
