@@ -105,6 +105,16 @@
   grid-template-columns: 36px minmax(0, 1fr) 32px;
   gap: 12px;
   align-items: center;
+  /* Match --filterable padding so 0-count rows stay aligned with clickable rows */
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  box-sizing: border-box;
 }
 
 .reviews-aggregate__row-label {
@@ -137,16 +147,8 @@
 }
 
 .reviews-aggregate__row--filterable {
-  width: 100%;
-  margin: 0;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
   cursor: pointer;
   text-align: left;
-  font: inherit;
-  color: inherit;
 }
 
 .reviews-aggregate__row--filterable:hover {
